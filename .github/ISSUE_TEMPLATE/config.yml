@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 💬 Community Discussions
+    url: https://github.com/OWNER/mobile-ide/discussions
+    about: Ask questions, share ideas, and discuss with the community
+  - name: 📖 Documentation
+    url: https://github.com/OWNER/mobile-ide/wiki
+    about: Check the wiki for guides and documentation
+  - name: 🛡️ Security Issue
+    url: https://github.com/OWNER/mobile-ide/security/policy
+    about: Please report security vulnerabilities here
