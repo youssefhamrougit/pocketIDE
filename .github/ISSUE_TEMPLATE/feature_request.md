@@ -1,6 +1,6 @@
 ---
 name: ✨ Feature Request
-about: Suggest an idea for the Mobile IDE
+about: Suggest an idea for the PocketIDE
 title: '[Feature] '
 labels: enhancement
 assignees: ''
@@ -20,7 +20,7 @@ A clear and concise description of any alternative solutions or features you've 
 
 ## How Would This Impact the Community?
 
-How would this feature benefit other developers using the Mobile IDE?
+How would this feature benefit other developers using the PocketIDE?
 
 ## Additional Context
 

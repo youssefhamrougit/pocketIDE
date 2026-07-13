@@ -1,6 +1,6 @@
 # 🔌 Plugin Development Guide
 
-Mobile IDE is designed to be extensible. Anyone can build plugins to add languages, themes, tools, and more.
+PocketIDE is designed to be extensible. Anyone can build plugins to add languages, themes, tools, and more.
 
 ---
 
@@ -18,7 +18,7 @@ Mobile IDE is designed to be extensible. Anyone can build plugins to add languag
 
 ## How Plugins Work
 
-Plugins are self-contained packages that extend Mobile IDE's capabilities. They are loaded at startup from the `plugins/` directory.
+Plugins are self-contained packages that extend PocketIDE's capabilities. They are loaded at startup from the `plugins/` directory.
 
 Each plugin is a directory containing:
 
@@ -39,7 +39,7 @@ my-plugin/
 
 ## Plugin Manifest
 
-The `plugin.json` manifest tells Mobile IDE what your plugin does.
+The `plugin.json` manifest tells PocketIDE what your plugin does.
 
 ```json
 {
@@ -109,8 +109,8 @@ The `plugin.json` manifest tells Mobile IDE what your plugin does.
 |-------|------|----------|-------------|
 | `name` | string | ✅ | Unique plugin identifier (kebab-case) |
 | `version` | string | ✅ | Semantic version (semver) |
-| `minAppVersion` | string | ✅ | Minimum Mobile IDE version |
-| `maxAppVersion` | string | ❌ | Maximum Mobile IDE version |
+| `minAppVersion` | string | ✅ | Minimum PocketIDE version |
+| `maxAppVersion` | string | ❌ | Maximum PocketIDE version |
 | `description` | string | ✅ | Short description |
 | `author` | string | ✅ | Author name or handle |
 | `repository` | string | ❌ | Link to source code |
@@ -249,13 +249,13 @@ window.deactivate = function() {
    ├── main.js
    └── README.md
    ```
-3. [Open a Plugin Submission issue](https://github.com/mobile-ide/mobile-ide/issues/new?template=plugin_submission.md)
+3. [Open a Plugin Submission issue](https://github.com/youssefhamrougit/pocketIDE/issues/new?template=plugin_submission.md)
 4. Submit a Pull Request adding your plugin to the `plugins/` directory
 5. A maintainer will review and merge
 
 ### Method 2: Self-Host
 
-You can host plugins on your own repository. Users install them by providing the repository URL in the Mobile IDE plugin browser.
+You can host plugins on your own repository. Users install them by providing the repository URL in the PocketIDE plugin browser.
 
 ### Review Criteria
 
@@ -278,8 +278,8 @@ The community plugin registry lives right here in this repo. Browse the `plugins
 
 ## Need Help?
 
-- Open a [Discussion](https://github.com/mobile-ide/mobile-ide/discussions) with the `plugins` tag
+- Open a [Discussion](https://github.com/youssefhamrougit/pocketIDE/discussions) with the `plugins` tag
 - Check existing plugins in the `plugins/` directory for reference
-- Ask in [GitHub Issues](https://github.com/mobile-ide/mobile-ide/issues)
+- Ask in [GitHub Issues](https://github.com/youssefhamrougit/pocketIDE/issues)
 
 Happy building! 🔌🚀

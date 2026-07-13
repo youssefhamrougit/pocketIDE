@@ -1,6 +1,6 @@
 ---
 name: 🔌 Plugin Submission
-about: Submit a plugin/extension for the Mobile IDE ecosystem
+about: Submit a plugin/extension for the PocketIDE ecosystem
 title: '[Plugin] '
 labels: plugin
 assignees: ''
@@ -28,7 +28,7 @@ List the key features your plugin provides:
 
 ## Compatibility
 
-- **Mobile IDE Version:** [e.g. >= 0.1.0]
+- **PocketIDE Version:** [e.g. >= 0.1.0]
 - **Platforms tested on:**
   - [ ] iOS
   - [ ] Android

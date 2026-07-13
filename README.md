@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🚀 Mobile IDE
+# 🚀 PocketIDE
 
 > **A modern, mobile-first IDE built for developers.**
 
@@ -18,9 +18,9 @@
 
 ## 📖 About
 
-Mobile IDE is a powerful mobile development environment that brings real coding to your phone or tablet. Instead of being just a text editor, it provides everything developers need — from project management and intelligent code editing to AI assistance, Git integration, and code execution.
+PocketIDE is a powerful mobile development environment that brings real coding to your phone or tablet. Instead of being just a text editor, it provides everything developers need — from project management and intelligent code editing to AI assistance, Git integration, and code execution.
 
-Our goal is to create the mobile IDE we've always wanted to use.
+Our goal is to create the PocketIDE we've always wanted to use.
 
 ## ✨ Planned Features
 
@@ -77,7 +77,7 @@ This project is built **by developers, for developers**. We welcome everyone.
 | 🐛 **Report a Bug** | [Bug Report](.github/ISSUE_TEMPLATE/bug_report.md) |
 | ✨ **Request a Feature** | [Feature Request](.github/ISSUE_TEMPLATE/feature_request.md) |
 | 🔑 **Submit a Plugin** | [Plugin Submission](.github/ISSUE_TEMPLATE/plugin_submission.md) |
-| 💬 **Start a Discussion** | [GitHub Discussions](https://github.com/mobile-ide/mobile-ide/discussions) |
+| 💬 **Start a Discussion** | [GitHub Discussions](https://github.com/youssefhamrougit/pocketIDE/discussions) |
 | 🛡️ **Security Policy** | [SECURITY.md](SECURITY.md) |
 | 📜 **Code of Conduct** | [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) |
 | ❓ **Getting Help** | [SUPPORT.md](SUPPORT.md) |
@@ -86,8 +86,8 @@ This project is built **by developers, for developers**. We welcome everyone.
 
 ```bash
 # Fork & clone the repo
-git clone https://github.com/YOUR_USERNAME/mobile-ide.git
-cd mobile-ide
+git clone https://github.com/YOUR_USERNAME/pocketIDE.git
+cd pocketIDE
 
 # Install Flutter dependencies
 flutter pub get

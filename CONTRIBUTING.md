@@ -1,4 +1,4 @@
-# Contributing to Mobile IDE
+# Contributing to PocketIDE
 
 First off, thank you for considering contributing! 🎉 We're building a mobile development environment for everyone, and every contribution makes a difference.
 
@@ -33,22 +33,22 @@ Please read our [Code of Conduct](CODE_OF_CONDUCT.md). We expect all contributor
 Not all contributions are code! Here's how you can help:
 
 ### 🐛 Report Bugs
-Found a bug? [Open an issue](https://github.com/mobile-ide/mobile-ide/issues/new?template=bug_report.md). Be as detailed as possible — device, OS version, steps to reproduce.
+Found a bug? [Open an issue](https://github.com/youssefhamrougit/pocketIDE/issues/new?template=bug_report.md). Be as detailed as possible — device, OS version, steps to reproduce.
 
 ### ✨ Suggest Features
-Have an idea? [Submit a feature request](https://github.com/mobile-ide/mobile-ide/issues/new?template=feature_request.md). Tell us what problem you're solving.
+Have an idea? [Submit a feature request](https://github.com/youssefhamrougit/pocketIDE/issues/new?template=feature_request.md). Tell us what problem you're solving.
 
 ### 📝 Improve Documentation
 Good documentation is just as important as good code. Fix typos, clarify explanations, or write new guides.
 
 ### 🔌 Build Plugins
-Extend Mobile IDE with plugins! See the [Plugin Development Guide](plugins/README.md).
+Extend PocketIDE with plugins! See the [Plugin Development Guide](plugins/README.md).
 
 ### 💻 Write Code
 Pick up an issue from the backlog, fix a bug, or implement a feature.
 
 ### 🌍 Translate
-Help make Mobile IDE accessible in more languages.
+Help make PocketIDE accessible in more languages.
 
 ---
 
@@ -57,8 +57,8 @@ Help make Mobile IDE accessible in more languages.
 1. **Fork** the repository
 2. **Clone** your fork:
    ```bash
-   git clone https://github.com/YOUR_USERNAME/mobile-ide.git
-   cd mobile-ide
+   git clone https://github.com/YOUR_USERNAME/pocketIDE.git
+   cd pocketIDE
    ```
 3. **Set up the dev environment** (see below)
 4. **Create a branch**:
@@ -108,7 +108,7 @@ Help make Mobile IDE accessible in more languages.
 ## Project Structure
 
 ```
-mobile-ide/
+pocketIDE/
 ├── lib/                        # Main application code
 │   ├── main.dart               # App entry point
 │   ├── app.dart                # App widget & routing
@@ -252,8 +252,8 @@ flutter test --coverage
 
 ## Community
 
-- **Discussions** — [GitHub Discussions](https://github.com/mobile-ide/mobile-ide/discussions)
-- **Issues** — [GitHub Issues](https://github.com/mobile-ide/mobile-ide/issues)
+- **Discussions** — [GitHub Discussions](https://github.com/youssefhamrougit/pocketIDE/discussions)
+- **Issues** — [GitHub Issues](https://github.com/youssefhamrougit/pocketIDE/issues)
 - **Plugin Registry** — Browse community plugins in the `plugins/` directory
 
 ### Recognition
@@ -265,7 +265,7 @@ We maintain a CONTRIBUTORS file to recognize everyone who contributes. If you've
 ## Getting Help
 
 - Check the [SUPPORT.md](SUPPORT.md) guide
-- Ask in [GitHub Discussions](https://github.com/mobile-ide/mobile-ide/discussions)
+- Ask in [GitHub Discussions](https://github.com/youssefhamrougit/pocketIDE/discussions)
 - Open an issue for bugs
 
 ---

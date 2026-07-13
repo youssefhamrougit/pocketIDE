@@ -1,4 +1,4 @@
-# 🚀 Mobile IDE
+# 🚀 PocketIDE
 
 A powerful mobile-first development environment that allows developers to code, run, and manage projects directly from their phones and tablets.
 
@@ -124,7 +124,7 @@ Features:
 # 🗂️ Project Structure
 
 ```
-mobile-ide/
+pocketide/
 
 ├── app/
 │   ├── screens/
@@ -191,7 +191,7 @@ Developer environment
 - Run projects
 
 ## Version 1.0
-Full mobile IDE
+Full PocketIDE
 
 - AI assistant
 - Cloud execution
