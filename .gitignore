@@ -32,3 +32,20 @@ ios/Pods/
 ios/.symlinks/
 ios/Flutter/Flutter.framework
 ios/Flutter/Flutter.podspec
+
+# PocketIDE Editor
+editor/node_modules/
+editor/dist/
+
+# PocketIDE Backend
+backend/node_modules/
+backend/data/
+backend/.env
+
+# Temp & Download artifacts (from partial downloads)
+*.zip
+*.gz
+*.tar
+UsersSETUP*/
+**/Temp/
+**/temp/

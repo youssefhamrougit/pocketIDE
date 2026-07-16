@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="color-scheme" content="dark" />
+  <title>PocketIDE Editor</title>
+  <!-- INJECT:EDITOR_STYLES -->
+</head>
+<body>
+  <div id="app">
+    <!-- Sidebar -->
+    <div id="sidebar">
+      <div id="sidebar-header">
+        <div id="sidebar-title">Explorer</div>
+        <div id="sidebar-actions">
+          <button class="sidebar-btn" id="btn-new-file" title="New File">+</button>
+          <button class="sidebar-btn" id="btn-new-folder" title="New Folder">📁</button>
+          <button class="sidebar-btn" id="btn-collapse" title="Collapse All">⊟</button>
+        </div>
+      </div>
+      <div id="file-tree"></div>
+    </div>
+
+    <!-- Resize Handle -->
+    <div id="sidebar-resize"></div>
+
+    <!-- Main Area -->
+    <div id="main">
+      <!-- Tab Bar -->
+      <div id="tab-bar">
+        <div id="tabs-container"></div>
+        <div id="tab-actions">
+          <button class="tab-action-btn" id="btn-theme-toggle" title="Toggle Theme">🌙</button>
+          <button class="tab-action-btn" id="btn-menu" title="Menu">☰</button>
+        </div>
+      </div>
+
+      <!-- Editor Area -->
+      <div id="editor-container">
+        <div id="editor-welcome">
+          <div id="welcome-content">
+            <div id="welcome-icon">🚀</div>
+            <h1>PocketIDE</h1>
+            <p>Select a file from the explorer to start editing</p>
+            <div id="welcome-shortcuts">
+              <div class="shortcut-row">
+                <span class="shortcut-key">Ctrl+N</span>
+                <span class="shortcut-desc">New File</span>
+              </div>
+              <div class="shortcut-row">
+                <span class="shortcut-key">Ctrl+S</span>
+                <span class="shortcut-desc">Save File</span>
+              </div>
+              <div class="shortcut-row">
+                <span class="shortcut-key">Ctrl+P</span>
+                <span class="shortcut-desc">Quick Open</span>
+              </div>
+              <div class="shortcut-row">
+                <span class="shortcut-key">Ctrl+W</span>
+                <span class="shortcut-desc">Close Tab</span>
+              </div>
+              <div class="shortcut-row">
+                <span class="shortcut-key">Ctrl+B</span>
+                <span class="shortcut-desc">Toggle Sidebar</span>
+              </div>
+            </div>
+            <div id="welcome-status">Editor loaded successfully</div>
+          </div>
+        </div>
+        <div id="editor-wrapper" style="display:none;"></div>
+      </div>
+
+      <!-- Status Bar -->
+      <div id="status-bar">
+        <div id="status-left">
+          <span id="status-branch">main</span>
+          <span class="status-separator">|</span>
+          <span id="status-encoding">UTF-8</span>
+          <span class="status-separator">|</span>
+          <span id="status-indentation">Spaces: 2</span>
+        </div>
+        <div id="status-right">
+          <span id="status-language">Plain Text</span>
+          <span class="status-separator">|</span>
+          <span id="status-position">Ln 1, Col 1</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Context Menu -->
+  <div id="context-menu" class="context-menu" style="display:none;">
+    <div class="context-menu-item" data-action="open">Open</div>
+    <div class="context-menu-item" data-action="rename">Rename</div>
+    <div class="context-menu-item" data-action="delete">Delete</div>
+    <div class="context-menu-separator"></div>
+    <div class="context-menu-item" data-action="new-file">New File</div>
+    <div class="context-menu-item" data-action="new-folder">New Folder</div>
+  </div>
+
+  <!-- Modal Overlay -->
+  <div id="modal-overlay" class="modal-overlay" style="display:none;">
+    <div id="modal-box" class="modal-box">
+      <div id="modal-title"></div>
+      <input type="text" id="modal-input" />
+      <div id="modal-actions">
+        <button class="modal-btn" id="modal-cancel">Cancel</button>
+        <button class="modal-btn modal-btn-primary" id="modal-confirm">OK</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- INJECT:EDITOR_SCRIPT -->
+</body>
+</html>
