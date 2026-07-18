@@ -1,74 +1,76 @@
 # 🚀 PocketIDE
 
-A powerful mobile-first development environment that allows developers to code, run, and manage projects directly from their phones and tablets.
+A powerful browser-based development environment that lets you code from anywhere — no setup required.
 
 ---
 
 # 🧠 Project Vision
 
-The goal of this project is to create a true IDE experience on mobile devices.
+PocketIDE is a dual-edition IDE:
 
-Current mobile coding apps are either:
-- Simple text editors without real development tools
-- Slow remote environments
-- Missing important features like terminals, Git, debugging, and AI assistance
-
-We want to build a complete developer workspace that fits in your pocket.
+1. **Standalone Edition** — A fully offline, zero-dependency IDE that runs from a single HTML file. Perfect for quick edits, learning, or environments without a backend.
+2. **Server Edition** — A full-stack IDE with a CodeMirror 6 editor, Node.js backend, authentication, and on-disk project storage. Ideal for development teams and power users.
 
 ---
 
 # 🏗️ Project Architecture
 
 ```
-Mobile Application
-        |
-        |
-        ↓
-Frontend Layer
-        |
-        ├── Code Editor
-        ├── File Explorer
-        ├── Terminal UI
-        ├── Project Manager
-        └── AI Assistant
-        |
-        ↓
-Backend Services
-        |
-        ├── Authentication
-        ├── Project Storage
-        ├── Cloud Execution
-        ├── Git Management
-        └── AI Processing
-        |
-        ↓
-Execution Environment
-        |
-        ├── Docker Containers
-        ├── Node.js Runtime
-        ├── Python Runtime
-        └── Other Languages
+┌─────────────────────────────────────────────────────────────┐
+│                  Standalone Edition                         │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌───────────┐  │
+│  │ File     │  │ Custom   │  │ Multi-   │  │ Theme     │  │
+│  │ Explorer │  │ Editor   │  │ Tab      │  │ System    │  │
+│  │          │  │ (Regex   │  │ Manager  │  │ (Dark/    │  │
+│  │          │  │  HL)     │  │          │  │  Light)   │  │
+│  └──────────┘  └──────────┘  └──────────┘  └───────────┘  │
+│                        ↕                                    │
+│                  localStorage                               │
+└─────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────┐
+│                    Server Edition                           │
+│  ┌──────────┐  ┌──────────────┐  ┌──────────────────────┐  │
+│  │ File     │  │ CodeMirror 6 │  │ Plugin System        │  │
+│  │ Explorer │  │  Editor      │  │ (API + Registry)     │  │
+│  └──────────┘  └──────────────┘  └──────────────────────┘  │
+│                        ↕                                    │
+│              ┌──────────────────────┐                       │
+│              │  API Client (fetch)  │                       │
+│              └──────────┬───────────┘                       │
+│                         ↕                                   │
+├─────────────────────────────────────────────────────────────┤
+│                     Backend (Node.js)                       │
+│  ┌──────────┐  ┌──────────────┐  ┌──────────────────────┐  │
+│  │ Auth     │  │ Project CRUD │  │ File Operations      │  │
+│  │ (JWT)    │  │              │  │ (Read/Write/Delete)   │  │
+│  └──────────┘  └──────────────┘  └──────────────────────┘  │
+│                        ↕                                    │
+│                Filesystem JSON Store                        │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ---
 
 # 📱 Development Plan
 
-## Phase 1 — Foundation (MVP)
+## Phase 1 — Foundation ✅
 
 ### Goal:
-Create a working mobile code editor.
+Create a working code editor in the browser.
 
 Features:
-
-✅ User authentication  
-✅ Create projects  
-✅ File explorer  
-✅ Create/edit/delete files  
-✅ Code editor  
-✅ Syntax highlighting  
-✅ Multiple tabs  
-✅ Dark theme  
+- ✅ Standalone edition (no backend needed)
+- ✅ Custom syntax highlighting (regex-based)
+- ✅ File explorer
+- ✅ Create/edit/delete files
+- ✅ Multi-tab editing
+- ✅ Dark/light themes
+- ✅ localStorage persistence
+- ✅ CodeMirror 6 editor (server edition)
+- ✅ Plugin API system
+- ✅ User authentication (server edition)
+- ✅ Backend project management
 
 ---
 
@@ -78,30 +80,28 @@ Features:
 Transform the editor into a real IDE.
 
 Features:
-
-⬜ Integrated terminal  
-⬜ Run JavaScript projects  
-⬜ Package installation  
-⬜ Git integration  
-⬜ Project templates  
-⬜ Error detection  
-⬜ Code formatting  
+- ⬜ Integrated terminal
+- ⬜ Run JavaScript projects
+- ⬜ Package installation
+- ⬜ Git integration (isomorphic-git)
+- ⬜ Project templates
+- ⬜ Error detection & linting
+- ⬜ Code formatting
 
 ---
 
 ## Phase 3 — Cloud Development
 
 ### Goal:
-Allow powerful development from mobile devices.
+Allow powerful development from anywhere.
 
 Features:
-
-⬜ Cloud workspaces  
-⬜ Remote project storage  
-⬜ Docker-based execution  
-⬜ Build systems  
-⬜ Deploy applications  
-⬜ Collaboration tools  
+- ⬜ Cloud workspaces
+- ⬜ Remote project storage
+- ⬜ Docker-based execution
+- ⬜ Build systems
+- ⬜ Deploy applications
+- ⬜ Collaboration tools
 
 ---
 
@@ -111,13 +111,12 @@ Features:
 Make coding faster and easier.
 
 Features:
-
-⬜ AI code generation  
-⬜ AI debugging  
-⬜ Explain code  
-⬜ Refactoring suggestions  
-⬜ Generate projects from prompts  
-⬜ Automatic error fixing  
+- ⬜ AI code generation
+- ⬜ AI debugging
+- ⬜ Explain code
+- ⬜ Refactoring suggestions
+- ⬜ Generate projects from prompts
+- ⬜ Automatic error fixing
 
 ---
 
@@ -125,74 +124,78 @@ Features:
 
 ```
 pocketide/
-
-├── app/
-│   ├── screens/
-│   ├── components/
-│   ├── editor/
-│   ├── terminal/
-│   └── navigation/
+├── index.html              # Standalone edition entry point
+├── app.js                  # Standalone core logic (editor, explorer, tabs)
+├── styles.css              # Standalone styling
 │
-├── backend/
-│   ├── api/
-│   ├── auth/
-│   ├── execution/
-│   ├── storage/
-│   └── database/
+├── editor/                 # CodeMirror 6 server edition
+│   ├── src/
+│   │   ├── editor.js       # Editor initialization & lifecycle
+│   │   ├── file-tree.js    # File explorer component
+│   │   ├── tabs.js         # Tab management
+│   │   ├── themes.js       # Theme system (dark/light)
+│   │   ├── languages.js    # Language definitions
+│   │   ├── bridge.js       # Mobile WebView bridge
+│   │   ├── api-client.js   # Backend REST client
+│   │   ├── plugin-api.js   # Plugin system
+│   │   └── index.html      # Editor page
+│   └── build.mjs           # esbuild config
 │
-├── services/
-│   ├── ai/
-│   ├── git/
-│   └── cloud/
+├── backend/                # Node.js backend
+│   ├── src/
+│   │   ├── server.js       # Express server
+│   │   ├── config.js       # Configuration
+│   │   ├── routes/         # API routes
+│   │   ├── middleware/     # Auth & error handling
+│   │   ├── services/       # Business logic
+│   │   └── storage/        # JSON file store
+│   └── package.json
 │
-├── docs/
-│   ├── architecture.md
-│   └── roadmap.md
-│
-└── README.md
+├── plugins/                # Community plugins
+├── docs/                   # Documentation
+├── README.md
+└── Plan.md
 ```
 
 ---
 
-# 🛠️ Technology Direction
+# 🛠️ Technology
 
-## Mobile App
-- React Native / Flutter
-- TypeScript / Dart
-- Monaco Editor or CodeMirror
+## Frontend (Standalone)
+- **Vanilla HTML5 + CSS3 + JavaScript (ES2022)**
+- Custom regex-based syntax highlighter
+- No build step — open and code
+- localStorage for persistence
+
+## Frontend (Server)
+- **CodeMirror 6** (via npm + esbuild)
+- **Vanilla JavaScript** — no framework dependencies
+- Plugin API for extensions
 
 ## Backend
-- Node.js
-- Docker
-- Database system
-- Cloud infrastructure
+- **Node.js** runtime
+- **Express 5** REST API
+- **bcryptjs + JWT** for authentication
+- **Filesystem-based JSON store** (no database needed)
 
-## AI
-- LLM API integration
-- Code analysis tools
-- AI agents
+## Build Tools
+- **esbuild** — fast bundler for the CodeMirror editor
 
 ---
 
 # 🗓️ Milestones
 
-## Version 0.1
-Basic editor
-
+## Version 0.1 — Basic Editor ✅
 - Open projects
-- Edit files
-- Save changes
+- Edit files with syntax highlighting
+- Save changes (localStorage or backend)
 
-## Version 0.5
-Developer environment
-
+## Version 0.5 — Developer Environment
 - Terminal
-- Git
+- Git integration
 - Run projects
 
-## Version 1.0
-Full PocketIDE
-
+## Version 1.0 — Full PocketIDE
 - AI assistant
 - Cloud execution
 - Collaboration
@@ -203,10 +206,9 @@ Full PocketIDE
 
 - Support multiple programming languages
 - Real-time collaboration
-- Mobile app publishing
-- Plugin system
-- Marketplace for extensions
-- Desktop version
+- Native mobile app (WebView wrapper)
+- Plugin marketplace
+- Desktop version (Electron/Tauri)
 
 ---
 
