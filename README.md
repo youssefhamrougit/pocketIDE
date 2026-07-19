@@ -98,8 +98,8 @@ pocketide/
 - ✅ **Server backend** — Authentication, project CRUD, file operations
 - ✅ **CodeMirror 6 editor** — Syntax highlighting for multiple languages
 - ✅ **Plugin API** — Extensible plugin system
+- ✅ **Git integration**
 - ⬜ **Integrated terminal**
-- ⬜ **Git integration**
 - ⬜ **AI assistant**
 - ⬜ **Cloud workspaces**
 
