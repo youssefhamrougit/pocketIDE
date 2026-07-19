@@ -114,6 +114,63 @@ html, body {
   overflow: hidden;
 }
 
+/* Sidebar Tab Bar */
+#sidebar-tab-bar {
+  display: flex;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+.sidebar-tab {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 4px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  font-family: var(--font-ui);
+}
+
+.sidebar-tab:hover {
+  color: var(--text-secondary);
+  background: var(--bg-hover);
+}
+
+.sidebar-tab.active {
+  color: var(--text-primary);
+  border-bottom-color: var(--accent-color);
+  background: var(--bg-secondary);
+}
+
+.sidebar-tab-icon {
+  font-size: 14px;
+}
+
+.sidebar-tab-label {
+  font-weight: 500;
+  letter-spacing: 0.3px;
+}
+
+/* Sidebar Views */
+.sidebar-view {
+  display: none;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+}
+
+.sidebar-view.active {
+  display: flex;
+}
+
 #sidebar-header {
   display: flex;
   align-items: center;
@@ -131,6 +188,27 @@ html, body {
 
 #sidebar-title {
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  min-width: 0;
+}
+
+#sidebar-title-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#sidebar-folder-name {
+  font-size: 10px;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 #sidebar-actions {
@@ -163,6 +241,360 @@ html, body {
   overflow-y: auto;
   overflow-x: hidden;
   padding: 4px 0;
+}
+
+/* ============================================================
+   Git Panel
+   ============================================================ */
+
+#git-panel {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+#git-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border-color);
+  min-height: 36px;
+}
+
+#git-header-title {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+}
+
+#git-header-actions {
+  display: flex;
+  gap: 4px;
+}
+
+#git-content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Branch Bar */
+#git-branch-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: var(--bg-tertiary);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+#git-branch-bar:hover {
+  background: var(--bg-hover);
+}
+
+#git-branch-icon {
+  font-size: 14px;
+  color: var(--accent-color);
+}
+
+#git-branch-name {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+}
+
+#git-branch-chevron {
+  font-size: 10px;
+  color: var(--text-muted);
+  transition: transform var(--transition-fast);
+}
+
+/* Section Headers */
+.git-section-header {
+  display: flex;
+  align-items: center;
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  gap: 4px;
+}
+
+.git-section-header:hover {
+  background: var(--bg-hover);
+}
+
+#git-changes-section {
+  flex-shrink: 0;
+}
+
+/* Changes List */
+#git-changes-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.git-change-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px 4px 16px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  line-height: 22px;
+}
+
+.git-change-item:hover {
+  background: var(--bg-hover);
+}
+
+.git-change-status {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  width: 20px;
+  flex-shrink: 0;
+  text-align: center;
+}
+
+.git-change-status.M { color: #e2b714; }  /* Modified - yellow */
+.git-change-status.A { color: #4ec9b0; }  /* Added - green */
+.git-change-status.D { color: #f14c4c; }  /* Deleted - red */
+.git-change-status.R { color: #e2b714; }  /* Renamed - yellow */
+.git-change-status['?'] { color: var(--text-muted); }  /* Untracked - gray */
+
+.git-change-file {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-change-stage {
+  font-size: 10px;
+  color: var(--text-muted);
+  padding: 1px 4px;
+  border-radius: 3px;
+  background: var(--bg-tertiary);
+  text-transform: uppercase;
+}
+
+/* Commit Area */
+#git-commit-area {
+  padding: 8px 12px;
+  border-top: 1px solid var(--border-color);
+}
+
+#git-commit-input {
+  width: 100%;
+  padding: 6px 8px;
+  font-size: 13px;
+  font-family: var(--font-mono);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  outline: none;
+  resize: vertical;
+  min-height: 48px;
+  line-height: 1.4;
+  transition: border-color var(--transition-fast);
+}
+
+#git-commit-input:focus {
+  border-color: var(--accent-color);
+}
+
+#git-commit-input::placeholder {
+  color: var(--text-muted);
+}
+
+#git-commit-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+#git-commit-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.git-action-btn {
+  padding: 5px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  background: var(--accent-color);
+  color: #ffffff;
+  transition: all var(--transition-fast);
+  font-family: var(--font-ui);
+}
+
+.git-action-btn:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+
+.git-action-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+#btn-git-init,
+#btn-git-init-inline {
+  background: var(--accent-color);
+  color: #fff;
+  border: none;
+  padding: 5px 12px;
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+#btn-git-init-inline {
+  display: block;
+  margin: 8px auto;
+  padding: 8px 20px;
+  font-size: 13px;
+}
+
+#btn-git-init:hover,
+#btn-git-init-inline:hover {
+  background: var(--accent-hover);
+}
+
+/* Empty state */
+.git-empty-msg {
+  text-align: center;
+  padding: 24px 16px 12px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
+/* Loading */
+#git-loading {
+  position: absolute;
+  inset: 0;
+  background: rgba(37, 37, 38, 0.85);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  z-index: 10;
+}
+
+#git-loading-spinner {
+  width: 24px;
+  height: 24px;
+  border: 3px solid var(--border-color);
+  border-top-color: var(--accent-color);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+#git-loading-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* Commits List */
+#git-commits-section {
+  border-top: 1px solid var(--border-color);
+  flex-shrink: 0;
+}
+
+#git-commits-list {
+  padding: 4px 12px;
+}
+
+.git-commit-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border-color);
+  font-size: 12px;
+}
+
+.git-commit-item:last-child {
+  border-bottom: none;
+}
+
+.git-commit-oid {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--accent-color);
+  flex-shrink: 0;
+  width: 52px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.git-commit-msg {
+  flex: 1;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.git-commit-meta {
+  font-size: 10px;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+/* Branch Switcher Modal Overrides */
+.branch-list-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 13px;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  transition: background var(--transition-fast);
+}
+
+.branch-list-item:hover {
+  background: var(--bg-hover);
+}
+
+.branch-list-item.active {
+  background: var(--bg-active);
+  color: var(--accent-color);
+}
+
+.branch-list-item .branch-check {
+  width: 16px;
+  color: var(--accent-color);
 }
 
 /* Tree Items */
@@ -644,6 +1076,64 @@ html, body {
   color: var(--text-muted);
 }
 
+/* ---- Welcome Action Buttons ---- */
+.welcome-btn {
+  display: block;
+  width: 100%;
+  max-width: 280px;
+  margin: 8px auto;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  border: 1px solid var(--accent-color);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  background: var(--accent-color);
+  color: #ffffff;
+  transition: all var(--transition-fast);
+  font-family: var(--font-ui);
+}
+
+.welcome-btn:hover {
+  background: var(--accent-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 122, 204, 0.3);
+}
+
+.welcome-btn:active {
+  transform: translateY(0);
+}
+
+.welcome-btn-secondary {
+  background: transparent;
+  color: var(--text-primary);
+  border-color: var(--border-color);
+}
+
+.welcome-btn-secondary:hover {
+  background: var(--bg-hover);
+  border-color: var(--text-secondary);
+  box-shadow: none;
+}
+
+.welcome-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 12px auto;
+  max-width: 280px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
+.welcome-divider::before,
+.welcome-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: var(--border-color);
+}
+
 /* ============================================================
    Status Bar
    ============================================================ */
@@ -697,6 +1187,9 @@ html, body {
 }
 
 .context-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   padding: 6px 16px;
   cursor: pointer;
   font-size: 13px;
@@ -707,6 +1200,24 @@ html, body {
 .context-menu-item:hover {
   background: var(--accent-color);
   color: #ffffff;
+}
+
+.context-menu-item .cm-icon {
+  width: 16px;
+  text-align: center;
+  flex-shrink: 0;
+  font-size: 12px;
+}
+
+.context-menu-item .cm-shortcut {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.context-menu-item:hover .cm-shortcut {
+  color: rgba(255,255,255,0.6);
 }
 
 .context-menu-separator {
@@ -814,6 +1325,167 @@ html, body {
    Responsive / Mobile
    ============================================================ */
 
+/* Mobile sidebar overlay backdrop */
+#sidebar-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 99;
+  opacity: 0;
+  transition: opacity 250ms ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#sidebar-overlay.visible {
+  opacity: 1;
+}
+
+/* Edge swipe zone — invisible strip on left edge to detect swipe-in */
+#edge-swipe-zone {
+  display: none;
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 20px;
+  height: 100%;
+  z-index: 50;
+  background: transparent;
+}
+
+/* Mobile hamburger button */
+#btn-mobile-menu {
+  display: none;
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: 18px;
+  width: 36px;
+  height: 36px;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+#btn-mobile-menu:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* Pinch-to-zoom indicator */
+#zoom-indicator {
+  position: fixed;
+  bottom: 48px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 6px 14px;
+  font-size: 13px;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  z-index: 3000;
+  opacity: 0;
+  transition: opacity 200ms ease;
+  pointer-events: none;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+}
+
+#zoom-indicator.visible {
+  opacity: 1;
+}
+
+/* Bottom sheet (mobile menu) */
+#bottom-sheet-overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 2000;
+  animation: fadeIn 150ms ease;
+}
+
+#bottom-sheet {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--bg-tertiary);
+  border-radius: 16px 16px 0 0;
+  z-index: 2001;
+  padding: 0 0 24px 0;
+  max-height: 70vh;
+  overflow-y: auto;
+  animation: slideUpSheet 300ms cubic-bezier(0.32, 0.72, 0, 1);
+  box-shadow: 0 -8px 32px rgba(0,0,0,0.5);
+}
+
+@keyframes slideUpSheet {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+#bottom-sheet-handle {
+  width: 36px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--text-muted);
+  margin: 8px auto 4px;
+  opacity: 0.4;
+}
+
+#bottom-sheet-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  padding: 8px 20px 12px;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.bottom-sheet-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 20px;
+  font-size: 15px;
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: background var(--transition-fast);
+  -webkit-tap-highlight-color: transparent;
+}
+
+.bottom-sheet-item:hover,
+.bottom-sheet-item:active {
+  background: var(--bg-hover);
+}
+
+.bottom-sheet-item .bs-icon {
+  font-size: 18px;
+  width: 28px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.bottom-sheet-item .bs-label {
+  flex: 1;
+}
+
+.bottom-sheet-item .bs-shortcut {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+}
+
+.bottom-sheet-separator {
+  height: 1px;
+  background: var(--border-color);
+  margin: 4px 16px;
+}
+
 @media (max-width: 768px) {
   #sidebar {
     position: fixed;
@@ -821,8 +1493,15 @@ html, body {
     top: 0;
     height: 100%;
     z-index: 100;
-    box-shadow: 4px 0 12px rgba(0,0,0,0.3);
+    box-shadow: 4px 0 16px rgba(0,0,0,0.4);
+    transform: translateX(-100%);
     transition: transform var(--transition-normal);
+    will-change: transform;
+    touch-action: none;
+  }
+
+  #sidebar.open {
+    transform: translateX(0);
   }
 
   #sidebar.collapsed {
@@ -830,14 +1509,44 @@ html, body {
     width: var(--sidebar-width) !important;
   }
 
+  #sidebar-overlay {
+    display: block;
+    pointer-events: none;
+  }
+
+  #sidebar-overlay.visible {
+    pointer-events: auto;
+  }
+
+  #edge-swipe-zone {
+    display: block;
+  }
+
   #sidebar-resize {
     display: none;
   }
 
+  #btn-mobile-menu {
+    display: flex;
+  }
+
   .tab {
-    min-width: 80px;
-    max-width: 140px;
-    font-size: 12px;
+    min-width: 60px;
+    max-width: 120px;
+    font-size: 11px;
+    padding: 5px 8px;
+  }
+
+  .tab .tab-close {
+    opacity: 1;
+    font-size: 16px;
+    width: 24px;
+    height: 24px;
+  }
+
+  .tab .tab-dirty {
+    width: 10px;
+    height: 10px;
   }
 
   .editor-wrapper-custom {
@@ -845,8 +1554,217 @@ html, body {
   }
 
   .editor-gutter {
-    width: 42px;
+    width: 36px;
   }
+
+  .editor-line-number {
+    padding: 0 6px 0 4px;
+    font-size: 10px;
+  }
+
+  .editor-highlight-layer,
+  .editor-textarea {
+    padding: 6px 8px;
+  }
+
+  #status-bar {
+    height: 28px;
+    font-size: 10px;
+    padding: 0 8px;
+  }
+
+  #status-left, #status-right {
+    gap: 4px;
+  }
+
+  #tab-bar {
+    min-height: 40px;
+  }
+
+  #tab-actions {
+    padding: 0 4px;
+  }
+
+  .tab-action-btn {
+    width: 32px;
+    height: 32px;
+    font-size: 16px;
+  }
+
+  .sidebar-tab-label {
+    display: none;
+  }
+
+  .sidebar-tab {
+    padding: 10px 4px;
+  }
+
+  .sidebar-tab-icon {
+    font-size: 18px;
+  }
+
+  .tree-item {
+    padding: 5px 12px 5px 8px;
+    font-size: 14px;
+    line-height: 28px;
+  }
+
+  .tree-item .icon {
+    font-size: 16px;
+  }
+
+  .context-menu {
+    min-width: 180px;
+    font-size: 14px;
+  }
+
+  .context-menu-item {
+    padding: 10px 16px;
+  }
+
+  .modal-box {
+    min-width: auto;
+    width: 90vw;
+    padding: 16px;
+  }
+
+  #welcome-content h1 {
+    font-size: 22px;
+  }
+
+  #welcome-icon {
+    font-size: 48px;
+  }
+
+  #welcome-shortcuts {
+    display: none;
+  }
+
+  .git-change-item {
+    padding: 6px 12px 6px 16px;
+    font-size: 14px;
+    line-height: 26px;
+  }
+
+  #git-commit-input {
+    font-size: 14px;
+    min-height: 56px;
+  }
+
+  .git-commit-item {
+    font-size: 13px;
+  }
+
+  .branch-list-item {
+    padding: 10px 12px;
+    font-size: 14px;
+  }
+}
+
+/* Small phone adjustments */
+@media (max-width: 480px) {
+  #sidebar {
+    width: 85vw !important;
+    min-width: 0;
+  }
+
+  .tab {
+    min-width: 50px;
+    max-width: 100px;
+    font-size: 10px;
+    padding: 4px 6px;
+  }
+
+  .editor-wrapper-custom {
+    font-size: 12px;
+  }
+
+  .editor-gutter {
+    width: 30px;
+  }
+
+  .editor-line-number {
+    padding: 0 4px 0 2px;
+    font-size: 9px;
+  }
+
+  #status-bar {
+    height: 26px;
+    font-size: 9px;
+  }
+
+  .git-empty-msg {
+    padding: 16px 12px 8px;
+    font-size: 12px;
+  }
+}
+
+/* Landscape mobile */
+@media (max-height: 480px) and (orientation: landscape) {
+  #sidebar {
+    width: 220px !important;
+  }
+
+  #tab-bar {
+    min-height: 32px;
+  }
+
+  .tab {
+    min-width: 60px;
+    max-width: 100px;
+    font-size: 10px;
+    padding: 3px 6px;
+  }
+
+  #status-bar {
+    height: 20px;
+    font-size: 9px;
+  }
+
+  .editor-wrapper-custom {
+    font-size: 12px;
+  }
+
+  .editor-gutter {
+    width: 32px;
+  }
+}
+
+/* ============================================================
+   Native File System Mode
+   ============================================================ */
+
+/* Folder badge in sidebar header */
+#sidebar.folder-mode #sidebar-title-text {
+  font-size: 11px;
+}
+
+#sidebar.folder-mode #btn-open-folder {
+  color: var(--accent-color);
+}
+
+/* Folder path tooltip */
+[data-folder-path] {
+  position: relative;
+}
+
+/* Unsupported browser warning */
+#fs-unsupported {
+  display: none;
+  padding: 12px 16px;
+  background: rgba(241, 76, 76, 0.15);
+  border: 1px solid rgba(241, 76, 76, 0.3);
+  border-radius: var(--radius-md);
+  color: #f14c4c;
+  font-size: 12px;
+  margin: 8px auto;
+  max-width: 280px;
+  text-align: center;
+  line-height: 1.5;
+}
+
+#fs-unsupported.visible {
+  display: block;
 }
 
 /* ============================================================

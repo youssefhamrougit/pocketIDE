@@ -6,20 +6,97 @@
   <meta name="color-scheme" content="dark" />
   <title>PocketIDE - Code Editor</title>
   <link rel="stylesheet" href="styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/isomorphic-git@1.38.6/index.min.js"></script>
 </head>
 <body>
   <div id="app">
     <!-- Sidebar -->
     <div id="sidebar">
-      <div id="sidebar-header">
-        <div id="sidebar-title">Explorer</div>
-        <div id="sidebar-actions">
-          <button class="sidebar-btn" id="btn-new-file" title="New File">+</button>
-          <button class="sidebar-btn" id="btn-new-folder" title="New Folder">📁</button>
-          <button class="sidebar-btn" id="btn-collapse" title="Collapse All">⊟</button>
+      <!-- Sidebar Tab Bar -->
+      <div id="sidebar-tab-bar">
+        <button class="sidebar-tab active" data-tab="explorer" title="Explorer">
+          <span class="sidebar-tab-icon">📁</span>
+          <span class="sidebar-tab-label">Explorer</span>
+        </button>
+        <button class="sidebar-tab" data-tab="git" title="Source Control">
+          <span class="sidebar-tab-icon">⎇</span>
+          <span class="sidebar-tab-label">Git</span>
+        </button>
+      </div>
+
+      <!-- Explorer View -->
+      <div id="sidebar-view-explorer" class="sidebar-view active">
+        <div id="sidebar-header">
+          <div id="sidebar-title">
+            <span id="sidebar-title-text">Explorer</span>
+            <span id="sidebar-folder-name" style="display:none;"></span>
+          </div>
+          <div id="sidebar-actions">
+            <button class="sidebar-btn" id="btn-open-folder" title="Open Folder">📂</button>
+            <button class="sidebar-btn" id="btn-new-file" title="New File">+</button>
+            <button class="sidebar-btn" id="btn-new-folder" title="New Folder">📁</button>
+            <button class="sidebar-btn" id="btn-collapse" title="Collapse All">⊟</button>
+          </div>
+        </div>
+        <div id="file-tree"></div>
+      </div>
+
+      <!-- Git View -->
+      <div id="sidebar-view-git" class="sidebar-view">
+        <div id="git-panel">
+          <div id="git-header">
+            <span id="git-header-title">Source Control</span>
+            <div id="git-header-actions">
+              <button class="sidebar-btn" id="btn-git-init" title="Initialize Git Repository">+📦</button>
+              <button class="sidebar-btn" id="btn-git-refresh" title="Refresh Status">🔄</button>
+            </div>
+          </div>
+          <div id="git-content" style="display:none;">
+            <!-- Branch Display -->
+            <div id="git-branch-bar" title="Switch branch (click to change)">
+              <span id="git-branch-icon">⎇</span>
+              <span id="git-branch-name">main</span>
+              <span id="git-branch-chevron">▶</span>
+            </div>
+
+            <!-- Uninitialized message -->
+            <div id="git-uninit" style="display:none;">
+              <div class="git-empty-msg">No git repository initialized</div>
+              <button class="git-action-btn" id="btn-git-init-inline">📦 Initialize Repository</button>
+            </div>
+
+            <!-- Changes Section -->
+            <div id="git-changes-section">
+              <div id="git-changes-header" class="git-section-header">
+                <span>Changes</span>
+                <span id="git-changes-count">(0)</span>
+              </div>
+              <div id="git-changes-list"></div>
+              <div id="git-commit-area">
+                <textarea id="git-commit-input" placeholder="Commit message (e.g. 'fix: ...')" rows="2" disabled></textarea>
+                <div id="git-commit-actions">
+                  <button class="git-action-btn" id="btn-git-commit" disabled>✓ Commit</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Commits Section -->
+            <div id="git-commits-section">
+              <div id="git-commits-header" class="git-section-header">
+                <span>Commits</span>
+                <span id="git-commits-count"></span>
+              </div>
+              <div id="git-commits-list"></div>
+            </div>
+          </div>
+
+          <!-- Loading overlay -->
+          <div id="git-loading" style="display:none;">
+            <div id="git-loading-spinner"></div>
+            <span id="git-loading-text">Working...</span>
+          </div>
         </div>
       </div>
-      <div id="file-tree"></div>
     </div>
 
     <!-- Resize Handle -->
@@ -31,6 +108,7 @@
       <div id="tab-bar">
         <div id="tabs-container"></div>
         <div id="tab-actions">
+          <button class="tab-action-btn" id="btn-mobile-menu" title="Menu">☰</button>
           <button class="tab-action-btn" id="btn-theme-toggle" title="Toggle Theme">🌙</button>
           <button class="tab-action-btn" id="btn-menu" title="Menu">☰</button>
         </div>
@@ -43,6 +121,9 @@
             <div id="welcome-icon">🚀</div>
             <h1>PocketIDE</h1>
             <p>Select a file from the explorer to start editing</p>
+            <button class="welcome-btn" id="btn-welcome-open-folder">📂  Open Folder</button>
+            <div class="welcome-divider"><span>or</span></div>
+            <button class="welcome-btn welcome-btn-secondary" id="btn-welcome-new-file">+  Create New File</button>
             <div id="welcome-shortcuts">
               <div class="shortcut-row">
                 <span class="shortcut-key">Ctrl+N</span>
@@ -93,14 +174,70 @@
     </div>
   </div>
 
+  <!-- Mobile sidebar overlay backdrop -->
+  <div id="sidebar-overlay"></div>
+
+  <!-- Edge swipe detection zone (mobile) -->
+  <div id="edge-swipe-zone"></div>
+
+  <!-- Pinch-to-zoom indicator -->
+  <div id="zoom-indicator"></div>
+
+  <!-- Bottom sheet menu (mobile) -->
+  <div id="bottom-sheet-overlay" style="display:none;">
+    <div id="bottom-sheet">
+      <div id="bottom-sheet-handle"></div>
+      <div id="bottom-sheet-title">Actions</div>
+      <div class="bottom-sheet-item" data-action="new-file">
+        <span class="bs-icon">+</span>
+        <span class="bs-label">New File</span>
+        <span class="bs-shortcut">Ctrl+N</span>
+      </div>
+      <div class="bottom-sheet-item" data-action="new-folder">
+        <span class="bs-icon">📁</span>
+        <span class="bs-label">New Folder</span>
+      </div>
+      <div class="bottom-sheet-separator"></div>
+      <div class="bottom-sheet-item" data-action="collapse-all">
+        <span class="bs-icon">⊟</span>
+        <span class="bs-label">Collapse All Folders</span>
+      </div>
+      <div class="bottom-sheet-separator"></div>
+      <div class="bottom-sheet-item" data-action="toggle-theme">
+        <span class="bs-icon">🌙</span>
+        <span class="bs-label" id="bs-theme-label">Toggle Theme</span>
+      </div>
+      <div class="bottom-sheet-item" data-action="toggle-sidebar">
+        <span class="bs-icon">📂</span>
+        <span class="bs-label">Toggle Sidebar</span>
+        <span class="bs-shortcut">Ctrl+B</span>
+      </div>
+      <div class="bottom-sheet-separator"></div>
+      <div class="bottom-sheet-item" data-action="about">
+        <span class="bs-icon">ℹ️</span>
+        <span class="bs-label">About PocketIDE</span>
+      </div>
+    </div>
+  </div>
+
   <!-- Context Menu -->
   <div id="context-menu" class="context-menu" style="display:none;">
-    <div class="context-menu-item" data-action="open">Open</div>
-    <div class="context-menu-item" data-action="rename">Rename</div>
-    <div class="context-menu-item" data-action="delete">Delete</div>
+    <div class="context-menu-item" data-action="open"><span class="cm-icon">📂</span> Open</div>
+    <div class="context-menu-item" data-action="preview"><span class="cm-icon">👁️</span> Quick Preview</div>
     <div class="context-menu-separator"></div>
-    <div class="context-menu-item" data-action="new-file">New File</div>
-    <div class="context-menu-item" data-action="new-folder">New Folder</div>
+    <div class="context-menu-item" data-action="cut"><span class="cm-icon">✂️</span> Cut <span class="cm-shortcut">Ctrl+X</span></div>
+    <div class="context-menu-item" data-action="copy"><span class="cm-icon">📋</span> Copy <span class="cm-shortcut">Ctrl+C</span></div>
+    <div class="context-menu-item" data-action="paste"><span class="cm-icon">📌</span> Paste <span class="cm-shortcut">Ctrl+V</span></div>
+    <div class="context-menu-item" data-action="duplicate"><span class="cm-icon">📄</span> Duplicate</div>
+    <div class="context-menu-separator"></div>
+    <div class="context-menu-item" data-action="rename"><span class="cm-icon">✏️</span> Rename <span class="cm-shortcut">F2</span></div>
+    <div class="context-menu-item" data-action="delete"><span class="cm-icon">🗑️</span> Delete <span class="cm-shortcut">Del</span></div>
+    <div class="context-menu-separator"></div>
+    <div class="context-menu-item" data-action="new-file"><span class="cm-icon">+</span> New File</div>
+    <div class="context-menu-item" data-action="new-folder"><span class="cm-icon">📁</span> New Folder</div>
+    <div class="context-menu-separator"></div>
+    <div class="context-menu-item" data-action="copy-path"><span class="cm-icon">🔗</span> Copy Path</div>
+    <div class="context-menu-item" data-action="copy-relative-path"><span class="cm-icon">🔗</span> Copy Relative Path</div>
   </div>
 
   <!-- Modal Overlay -->
