@@ -78,9 +78,12 @@ rm -rf "$WORK"
 mkdir -p "$WORK/assets"
 
 log "Copying app files into APK assets..."
-mkdir -p "$WORK/assets/vendor"
 cp "$REPO_DIR/index.html" "$REPO_DIR/app.js" "$REPO_DIR/styles.css" "$WORK/assets/"
-cp "$REPO_DIR/vendor/"*.js "$WORK/assets/vendor/"
+# NOTE: aapt2 on Windows stores assets in subdirectories with BACKSLASH entry
+# names (assets/vendor\x.js), which Android's AssetManager cannot resolve.
+# Flatten the vendored JS to top-level assets and rewrite index.html to match.
+cp "$REPO_DIR/vendor/"*.js "$WORK/assets/"
+sed -i 's|src="vendor/buffer-polyfill.js"|src="buffer-polyfill.js"|; s|src="vendor/isomorphic-git.min.js"|src="isomorphic-git.min.js"|' "$WORK/assets/index.html"
 
 log "Assembling resources..."
 cp -r "$PROJECT_DIR/res/." "$WORK/res/"
@@ -146,6 +149,10 @@ log "Verifying signature..."
 cp "$WORK/web/icon-512.png" "$OUT_DIR/logo.png"
 cp "$WORK/web/icon-512.png" "$OUT_DIR/icon-512.png"
 cp "$REPO_DIR/README.md" "$OUT_DIR/README.md"
+
+# Keep the repo's committed copy in sync
+mkdir -p "$REPO_DIR/apk"
+cp "$OUT_DIR/PocketIDE.apk" "$REPO_DIR/apk/PocketIDE.apk"
 
 SIZE=$(du -h "$OUT_DIR/PocketIDE.apk" | cut -f1)
 log "Done! $OUT_DIR/PocketIDE.apk ($SIZE)"

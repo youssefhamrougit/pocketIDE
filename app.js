@@ -683,9 +683,14 @@ const Autocomplete = {
       out.push({ label, insert: insert !== undefined ? insert : label, kind });
     };
     if (data) {
-      (data.keywords || []).forEach(k => push(k, k, 'kw'));
-      (data.builtins || []).forEach(b => push(b, b, 'bi'));
+      // snippets first so keywords never shadow them (e.g. 'for' snippet vs 'for' keyword)
       Object.entries(data.snippets || {}).forEach(([k, tpl]) => push(k, tpl, 'sn'));
+      (data.keywords || []).forEach(k => { if (!seen.has(k)) push(k, k, 'kw'); });
+      (data.builtins || []).forEach(b => push(b, b, 'bi'));
+    }
+    // language-specific extras (e.g. TypeScript-only keywords)
+    if (lang === 'TypeScript' || lang === 'TSX') {
+      ['interface','type','enum','namespace','declare','readonly','abstract','implements','satisfies','keyof','infer','as','unknown','never','any','public','private','protected'].forEach(k => push(k, k, 'kw'));
     }
     // contextual: identifiers already used in this document (skip the partial word being typed)
     const kwSet = new Set(data ? data.keywords : []);
@@ -969,7 +974,10 @@ const Problems = {
   _voidTags: new Set(['area','base','br','col','embed','hr','img','input','link','meta','param','source','track','wbr']),
 
   _checkTags(code, problems) {
-    const src = code.replace(/<!--[\s\S]*?-->/g, '');
+    const src = code
+      .replace(/<!--[\s\S]*?-->/g, '')
+      .replace(/<script[\s\S]*?<\/script>/gi, '')
+      .replace(/<style[\s\S]*?<\/style>/gi, '');
     const stack = [];
     const re = /<\/?([a-zA-Z][\w-]*)(?:\s[^>]*)?\/?>/g;
     let m;
@@ -991,14 +999,18 @@ const Problems = {
   },
 
   _checkJS(code, problems) {
+    // ignore comments and string literals to avoid false positives
+    const src = code
+      .replace(/\/\/[^\n]*|\/\*[\s\S]*?\*\//g, '')
+      .replace(/"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`/g, '""');
     const re = /console\.(log|debug)\s*\(/g;
     let m;
-    while ((m = re.exec(code)) !== null) {
-      problems.push({ line: this._lineOf(code, m.index), col: this._colOf(code, m.index), severity: 'info', message: `console.${m[1]}() left in code` });
+    while ((m = re.exec(src)) !== null) {
+      problems.push({ line: this._lineOf(src, m.index), col: this._colOf(src, m.index), severity: 'info', message: `console.${m[1]}() left in code` });
     }
     const dbg = /\bdebugger\b/g;
-    while ((m = dbg.exec(code)) !== null) {
-      problems.push({ line: this._lineOf(code, m.index), col: this._colOf(code, m.index), severity: 'info', message: 'debugger statement left in code' });
+    while ((m = dbg.exec(src)) !== null) {
+      problems.push({ line: this._lineOf(src, m.index), col: this._colOf(src, m.index), severity: 'info', message: 'debugger statement left in code' });
     }
   },
 };
@@ -1178,6 +1190,8 @@ class TextEditor {
   _maybeAutocomplete() {
     if (!this.ac) return;
     const ta = this.textarea;
+    // skip on very large documents to keep mobile typing smooth
+    if (ta.value.length > 150000) { this.ac.close(); return; }
     const pos = ta.selectionStart;
     const before = ta.value.slice(0, pos);
     const m = before.match(/[A-Za-z_$][\w$]*$/);
@@ -2015,11 +2029,15 @@ const GitFS = class GitFS {
   }
 
   _hasChildren(key) {
-    // storage keys are '<ns><path>' where the namespace already ends with '_';
-    // a dir has children when some key is strictly longer and starts with it
+    // A namespace root (ends with '_') has children when any key is longer and
+    // starts with it; a dir path needs a following '/' so 'main.cpp' does not
+    // turn 'main' into a phantom directory.
+    const isRoot = key === this.gitNs || key === this.fileNs;
     for (let i = 0; i < localStorage.length; i++) {
       const k = localStorage.key(i);
-      if (k && k.length > key.length && k.startsWith(key)) return true;
+      if (k && k.length > key.length && k.startsWith(key)) {
+        if (isRoot || k[key.length] === '/') return true;
+      }
     }
     return false;
   }
@@ -2164,9 +2182,9 @@ class GitPanel {
       const git = await this.ensureGit();
       await git.initRepo();
       this.app.gitInitialized = true;
-      await this.refresh();
     } catch (e) { console.warn('git init failed:', e); }
     this.busy = false;
+    await this.refresh();
   }
 
   async stageAll() {
@@ -2175,9 +2193,9 @@ class GitPanel {
     try {
       const git = await this.ensureGit();
       await git.stageAll();
-      await this.refresh();
     } catch (e) { console.warn('git stage failed:', e); }
     this.busy = false;
+    await this.refresh();
   }
 
   async commit() {
@@ -2192,9 +2210,9 @@ class GitPanel {
       await git.stageAll();
       await git.commit(message);
       if (msg) msg.value = '';
-      await this.refresh();
     } catch (e) { console.warn('git commit failed:', e); }
     this.busy = false;
+    await this.refresh();
   }
 
   async refresh() {
