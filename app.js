@@ -79,7 +79,8 @@ const ThemeManager = {
 
     const btn = document.getElementById('btn-theme-toggle');
     if (btn) {
-      btn.textContent = this.currentTheme === 'dark' ? '🌙' : '☀️';
+      const use = btn.querySelector('use');
+      if (use) use.setAttribute('href', this.currentTheme === 'dark' ? '#i-moon' : '#i-sun');
       btn.title = this.currentTheme === 'dark' ? 'Switch to Light Theme' : 'Switch to Dark Theme';
     }
   },
@@ -102,6 +103,13 @@ const LanguageDetector = {
     ts:     { name: 'TypeScript' },
     tsx:    { name: 'TSX' },
     py:     { name: 'Python' },
+    cpp:    { name: 'C++' }, cc: { name: 'C++' }, cxx: { name: 'C++' },
+    c:      { name: 'C' },
+    h:      { name: 'C/C++ Header' }, hpp: { name: 'C++ Header' },
+    cs:     { name: 'C#' },
+    scss:   { name: 'SCSS' }, sass: { name: 'Sass' },
+    sql:    { name: 'SQL' },
+    vue:    { name: 'Vue' },
     html:   { name: 'HTML' },
     htm:    { name: 'HTML' },
     css:    { name: 'CSS' },
@@ -166,6 +174,16 @@ const SyntaxHighlighter = {
         return this.highlightHTML(escaped);
       case 'CSS':
         return this.highlightCSS(escaped);
+      case 'SCSS':
+        return this.highlightCSS(escaped);
+      case 'C++':
+      case 'C':
+      case 'C#':
+      case 'C/C++ Header':
+      case 'C++ Header':
+        return this.highlightC(escaped);
+      case 'SQL':
+        return this.highlightSQL(escaped);
       case 'Python':
         return this.highlightPython(escaped);
       case 'JSON':
@@ -193,6 +211,25 @@ const SyntaxHighlighter = {
     code = code.replace(/(\b[\w-]+)(=)(&quot;|&#39;|")/g, '<span class="hl-attr">$1</span>$2$3');
     code = code.replace(/(&quot;[^&]*&quot;|&#39;[^&#]*&#39;)/g, '<span class="hl-string">$1</span>');
     code = code.replace(/(&lt;!--[\s\S]*?--&gt;)/g, '<span class="hl-comment">$1</span>');
+    return code;
+  },
+
+  highlightC(code) {
+    code = code.replace(/('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")/g, '<span class="hl-string">$1</span>');
+    code = code.replace(/(\/\/.*$|\/\*[\s\S]*?\*\/)/gm, '<span class="hl-comment">$1</span>');
+    const keywords = /\b(alignas|alignof|and|asm|auto|bool|break|case|catch|char|class|const|constexpr|continue|default|delete|do|double|else|enum|explicit|extern|false|float|for|friend|goto|if|inline|int|long|mutable|namespace|new|noexcept|nullptr|operator|private|protected|public|register|reinterpret_cast|return|short|signed|sizeof|static|static_assert|struct|switch|template|this|throw|true|try|typedef|typeid|typename|union|unsigned|using|virtual|void|volatile|wchar_t|while)\b/g;
+    code = code.replace(keywords, '<span class="hl-keyword">$1</span>');
+    code = code.replace(/^(#[^\n]*)/gm, '<span class="hl-keyword">$1</span>');
+    code = code.replace(/\b(\d+\.?\d*)\b/g, '<span class="hl-number">$1</span>');
+    return code;
+  },
+
+  highlightSQL(code) {
+    const keywords = /\b(select|from|where|insert|into|values|update|set|delete|create|table|drop|alter|join|left|right|inner|outer|on|as|and|or|not|null|group|by|order|having|limit|offset|union|all|distinct|primary|key|foreign|references|index|view|procedure|function|begin|commit|rollback|cascade)\b/gi;
+    code = code.replace(/(--[^\n]*|\/\*[\s\S]*?\*\/)/g, '<span class="hl-comment">$1</span>');
+    code = code.replace(/('[^']*'|"[^"]*")/g, '<span class="hl-string">$1</span>');
+    code = code.replace(keywords, '<span class="hl-keyword">$1</span>');
+    code = code.replace(/\b(\d+\.?\d*)\b/g, '<span class="hl-number">$1</span>');
     return code;
   },
 
@@ -471,6 +508,44 @@ class TextEditor {
 }
 
 // ============================================================
+// File Icons — crisp extension badges (no emojis)
+// ============================================================
+
+const FileIcons = {
+  map: {
+    js: ['#f7df1e', 'JS'], mjs: ['#f7df1e', 'JS'], cjs: ['#f7df1e', 'JS'],
+    ts: ['#3178c6', 'TS'], mts: ['#3178c6', 'TS'], cts: ['#3178c6', 'TS'],
+    jsx: ['#61dafb', 'JSX'], tsx: ['#61dafb', 'TSX'],
+    py: ['#3572a5', 'PY'], html: ['#e34f26', 'HTML'], htm: ['#e34f26', 'HTML'],
+    css: ['#563d7c', 'CSS'], scss: ['#cd6799', 'SCSS'], sass: ['#cd6799', 'SASS'],
+    json: ['#f5a623', 'JSON'], md: ['#4aa3df', 'MD'], mdown: ['#4aa3df', 'MD'], markdown: ['#4aa3df', 'MD'],
+    txt: ['#9aa0a6', 'TXT'], cpp: ['#659ad2', 'C++'], cc: ['#659ad2', 'C++'], cxx: ['#659ad2', 'C++'],
+    c: ['#659ad2', 'C'], h: ['#a074c4', 'H'], hpp: ['#a074c4', 'HPP'],
+    java: ['#e76f00', 'JAVA'], rs: ['#dea584', 'RS'], go: ['#00add8', 'GO'],
+    rb: ['#cc342d', 'RB'], php: ['#777bb4', 'PHP'], swift: ['#f05138', 'SW'],
+    kt: ['#7f52ff', 'KT'], dart: ['#00b4ab', 'DA'], sh: ['#4eaa25', 'SH'],
+    bash: ['#4eaa25', 'SH'], zsh: ['#4eaa25', 'SH'], bat: ['#9aa0a6', 'BAT'], cmd: ['#9aa0a6', 'CMD'],
+    yml: ['#cb171e', 'YML'], yaml: ['#cb171e', 'YAML'], toml: ['#9c4221', 'TOML'],
+    xml: ['#e34f26', 'XML'], svg: ['#ffb13b', 'SVG'], sql: ['#e38c00', 'SQL'],
+    vue: ['#41b883', 'VUE'], lua: ['#000080', 'LUA'], r: ['#2266aa', 'R'],
+    cs: ['#68217a', 'CS'], fs: ['#672179', 'FS'], ex: ['#7d53a4', 'EX'], exs: ['#7d53a4', 'EXS'],
+    erl: ['#b83998', 'ERL'], hs: ['#5e5086', 'HS'], zig: ['#f7a41d', 'ZIG'],
+    env: ['#d4a72c', 'ENV'], lock: ['#9aa0a6', 'LOCK'], gitignore: ['#9aa0a6', 'GIT'],
+  },
+
+  html(filename) {
+    const ext = (filename.split('.').pop() || '').toLowerCase();
+    const def = this.map[ext];
+    if (!def) {
+      return '<svg class="fi" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>';
+    }
+    const [color, label] = def;
+    const fontSize = label.length > 3 ? 6.2 : 7.2;
+    return `<svg class="fi" width="18" height="18" viewBox="0 0 18 18"><rect x="1" y="1" width="16" height="16" rx="3.5" fill="${color}1f" stroke="${color}" stroke-width="1.1"/><text x="9" y="11.6" font-size="${fontSize}" font-weight="700" font-family="-apple-system, 'Segoe UI', Roboto, sans-serif" text-anchor="middle" fill="${color}">${label}</text></svg>`;
+  },
+};
+
+// ============================================================
 // File Tree
 // ============================================================
 
@@ -565,12 +640,14 @@ class FileTree {
       item.appendChild(chevron);
       const icon = document.createElement('span');
       icon.className = 'icon';
-      icon.textContent = isExpanded ? '📂' : '📁';
+      icon.innerHTML = isExpanded
+        ? '<svg class="fi fi-folder"><use href="#i-folder-open"/></svg>'
+        : '<svg class="fi fi-folder"><use href="#i-folder"/></svg>';
       item.appendChild(icon);
     } else {
       const icon = document.createElement('span');
       icon.className = 'icon';
-      icon.textContent = this.getFileIcon(node.name);
+      icon.innerHTML = this.getFileIcon(node.name);
       item.appendChild(icon);
     }
 
@@ -592,18 +669,7 @@ class FileTree {
   }
 
   getFileIcon(filename) {
-    const ext = filename.split('.').pop().toLowerCase();
-    const icons = {
-      js: '📄', jsx: '⚛️', ts: '📘', tsx: '⚛️',
-      py: '🐍', html: '🌐', css: '🎨', json: '📋',
-      md: '📝', txt: '📄', gitignore: '🔧',
-      env: '🔒', yml: '⚙️', yaml: '⚙️',
-      toml: '⚙️', xml: '📰', svg: '🖼️',
-      lock: '🔒', rs: '🦀', go: '🔵',
-      java: '☕', rb: '💎', php: '🐘', swift: '🐦',
-      kt: '📱', dart: '🎯', sh: '💻', bat: '🪟',
-    };
-    return icons[ext] || '📄';
+    return FileIcons.html(filename);
   }
 
   handleClick(e) {
@@ -715,9 +781,9 @@ class FileTree {
 
   promptNewFile(node) {
     const parentPath = node.type === 'folder' ? node.path : '';
-    this.showInputModal('New File', 'Enter file name:', '', (name) => {
+    this.showInputModal('New File', 'e.g. main.py, index.cpp', '', (name) => {
       if (name && this.callbacks.onNewFile) this.callbacks.onNewFile(parentPath, name);
-    });
+    }, { chips: true });
   }
 
   promptNewFolder(node) {
@@ -727,19 +793,43 @@ class FileTree {
     });
   }
 
-  showInputModal(titleText, placeholder, defaultValue, onConfirm) {
+  showInputModal(titleText, placeholder, defaultValue, onConfirm, opts = {}) {
     const modal = document.getElementById('modal-overlay');
     const title = document.getElementById('modal-title');
+    const subtitle = document.getElementById('modal-subtitle');
     const input = document.getElementById('modal-input');
+    const chipsEl = document.getElementById('modal-input-chips');
     const confirm = document.getElementById('modal-confirm');
     const cancel = document.getElementById('modal-cancel');
     if (!modal) return;
 
     title.textContent = titleText;
+    if (subtitle) subtitle.style.display = opts.chips ? 'block' : 'none';
     input.value = defaultValue || '';
     input.placeholder = placeholder;
     input.select();
     modal.style.display = 'flex';
+
+    if (chipsEl) {
+      chipsEl.innerHTML = '';
+      if (opts.chips) {
+        const EXTS = ['py', 'cpp', 'js', 'html', 'css', 'ts', 'md', 'json', 'java', 'go', 'rs', 'rb', 'txt'];
+        EXTS.forEach(ext => {
+          const chip = document.createElement('button');
+          chip.type = 'button';
+          chip.className = 'modal-chip';
+          chip.textContent = '.' + ext;
+          chip.addEventListener('click', (e) => {
+            e.preventDefault();
+            const base = input.value.replace(/\.[^.]+$/, '') || 'index';
+            input.value = base + '.' + ext;
+            input.focus();
+            input.setSelectionRange(input.value.length, input.value.length);
+          });
+          chipsEl.appendChild(chip);
+        });
+      }
+    }
 
     const handleConfirm = () => {
       const value = input.value.trim();
@@ -1055,486 +1145,6 @@ class NativeFileSystem {
 }
 
 // ============================================================
-// Git Integration — Custom localStorage-backed fs for isomorphic-git
-// ============================================================
-
-class GitFS {
-  constructor(projectId) {
-    this.projectId = projectId;
-    this._storeKey = `pocketide_git_${projectId}`;
-    this._data = null;
-    this._dirty = false;
-    this._saveTimer = null;
-    this._load();
-    this.promises = this._createPromiseAPI();
-  }
-
-  _load() {
-    try { const r = localStorage.getItem(this._storeKey); this._data = r ? JSON.parse(r) : { '/': { type: 'dir', children: {}, mtime: Date.now(), mode: 0o755 } }; }
-    catch { this._data = { '/': { type: 'dir', children: {}, mtime: Date.now(), mode: 0o755 } }; }
-  }
-
-  _markDirty() { this._dirty = true; if (this._saveTimer) clearTimeout(this._saveTimer); this._saveTimer = setTimeout(() => this._flush(), 300); }
-
-  _flush() { if (this._dirty) { try { localStorage.setItem(this._storeKey, JSON.stringify(this._data)); } catch (e) { console.warn('GitFS: localStorage write failed', e); } this._dirty = false; } }
-
-  flush() { if (this._saveTimer) clearTimeout(this._saveTimer); this._flush(); }
-
-  _normalize(p) {
-    if (!p) return '/';
-    p = String(p).replace(/\\/g, '/');
-    if (!p.startsWith('/')) p = '/' + p;
-    p = p.replace(/\/+/g, '/');
-    if (p.length > 1 && p.endsWith('/')) p = p.slice(0, -1);
-    return p;
-  }
-
-  _resolve(path) {
-    path = this._normalize(path);
-    if (path === '/') return this._data['/'];
-    const parts = path.split('/').filter(Boolean);
-    let node = this._data['/'];
-    for (const part of parts) { if (!node || node.type !== 'dir') return null; node = (node.children || {})[part]; if (!node) return null; }
-    return node;
-  }
-
-  _ensureParent(path) {
-    path = this._normalize(path);
-    if (path === '/') return { parent: this._data['/'], name: null };
-    const parts = path.split('/').filter(Boolean);
-    const name = parts.pop();
-    let node = this._data['/'];
-    for (const part of parts) {
-      if (!node.children) node.children = {};
-      if (!(part in node.children)) node.children[part] = { type: 'dir', children: {}, mtime: Date.now(), mode: 0o755 };
-      node = node.children[part];
-      if (node.type !== 'dir') throw new Error(`ENOTDIR: Not a directory — ${path}`);
-    }
-    if (!node.children) node.children = {};
-    return { parent: node, name };
-  }
-
-  async _walk(dirPath) {
-    const results = [];
-    const entries = await this.promises.readdir(dirPath);
-    for (const entry of entries) {
-      const full = dirPath === '/' ? `/${entry}` : `${dirPath}/${entry}`;
-      const st = await this.promises.stat(full);
-      if (st.isDirectory()) results.push(...(await this._walk(full)));
-      else results.push(full.startsWith('/') ? full.substring(1) : full);
-    }
-    return results;
-  }
-
-  _createPromiseAPI() {
-    const self = this;
-    return {
-      async readFile(path, options = {}) {
-        const node = self._resolve(path);
-        if (!node || node.type !== 'file') { const e = new Error(`ENOENT: no such file, open '${path}'`); e.code = 'ENOENT'; throw e; }
-        let content = node.content;
-        if (options.encoding === 'utf8') {
-          if (content instanceof Uint8Array) return new TextDecoder().decode(content);
-          if (content && content.type === 'Buffer' && Array.isArray(content.data)) return new TextDecoder().decode(new Uint8Array(content.data));
-          return String(content || '');
-        }
-        if (typeof content === 'string') return new TextEncoder().encode(content);
-        if (content && content.type === 'Buffer' && Array.isArray(content.data)) return new Uint8Array(content.data);
-        return content || new Uint8Array(0);
-      },
-      async writeFile(path, data) {
-        const { parent, name } = self._ensureParent(path);
-        let stored;
-        if (typeof data === 'string') stored = data;
-        else if (data instanceof Uint8Array) stored = { type: 'Buffer', data: Array.from(data) };
-        else if (Array.isArray(data)) stored = { type: 'Buffer', data: Array.from(data) };
-        else if (data && data.type === 'Buffer') stored = data;
-        else stored = String(data || '');
-        parent.children[name] = { type: 'file', content: stored, mtime: Date.now(), mode: 0o644 };
-        self._markDirty();
-      },
-      async unlink(path) {
-        const { parent, name } = self._ensureParent(path);
-        if (parent.children && name && name in parent.children) { delete parent.children[name]; self._markDirty(); }
-      },
-      async readdir(path) {
-        const node = self._resolve(path);
-        if (!node || node.type !== 'dir') { const e = new Error(`ENOENT: no such directory, scandir '${path}'`); e.code = 'ENOENT'; throw e; }
-        return Object.keys(node.children || {}).sort();
-      },
-      async mkdir(path, options = {}) {
-        if (self._resolve(path)) return;
-        const { parent, name } = self._ensureParent(path);
-        parent.children[name] = { type: 'dir', children: {}, mtime: Date.now(), mode: options.mode || 0o755 };
-        self._markDirty();
-      },
-      async rmdir(path) {
-        const { parent, name } = self._ensureParent(path);
-        if (parent.children && name && name in parent.children) {
-          const node = parent.children[name];
-          if (node.type !== 'dir') throw new Error(`ENOTDIR: not a directory — ${path}`);
-          if (node.children && Object.keys(node.children).length > 0) throw new Error(`ENOTEMPTY: directory not empty — ${path}`);
-          delete parent.children[name];
-          self._markDirty();
-        }
-      },
-      async stat(path) {
-        const node = self._resolve(path);
-        if (!node) { const e = new Error(`ENOENT: no such file or directory, stat '${path}'`); e.code = 'ENOENT'; throw e; }
-        const isFile = node.type === 'file';
-        const size = isFile ? (typeof node.content === 'string' ? node.content.length : (node.content && node.content.data ? node.content.data.length : 0)) : 0;
-        return { isDirectory: () => node.type === 'dir', isFile: () => node.type === 'file', isSymbolicLink: () => false, size, mode: node.mode || (node.type === 'dir' ? 0o755 : 0o644), mtime: new Date(node.mtime || Date.now()), ctime: new Date(node.mtime || Date.now()) };
-      },
-      lstat(path) { return this.stat(path); },
-      async readlink() { const e = new Error('ENOSYS: readlink not supported'); e.code = 'ENOSYS'; throw e; },
-      async symlink() { const e = new Error('ENOSYS: symlink not supported'); e.code = 'ENOSYS'; throw e; },
-      async rename(oldPath, newPath) {
-        try { const d = await this.readFile(oldPath); await this.writeFile(newPath, d); await this.unlink(oldPath); self._markDirty(); return; } catch {}
-        try {
-          const entries = await this.readdir(oldPath);
-          await this.mkdir(newPath);
-          for (const e of entries) await this.rename(oldPath === '/' ? `/${e}` : `${oldPath}/${e}`, newPath === '/' ? `/${e}` : `${newPath}/${e}`);
-          await this.rmdir(oldPath); self._markDirty();
-        } catch { const e = new Error(`ENOENT: no such file, rename '${oldPath}' -> '${newPath}'`); e.code = 'ENOENT'; throw e; }
-      },
-    };
-  }
-}
-
-// ============================================================
-// Git Integration — wraps isomorphic-git operations
-// ============================================================
-
-class GitIntegration {
-  constructor(projectId, fs) {
-    this.projectId = projectId;
-    this.fs = fs;
-    this.dir = '/';
-    this.initialized = false;
-    this.author = { name: 'PocketIDE User', email: 'user@pocketide.local' };
-  }
-
-  async init() {
-    try {
-      const branches = await git.listBranches({ fs: this.fs, dir: this.dir });
-      this.initialized = Array.isArray(branches) && branches.length > 0;
-      if (this.initialized && branches.length === 0) this.initialized = true;
-    } catch { this.initialized = false; }
-    return this.initialized;
-  }
-
-  async initRepo() { await git.init({ fs: this.fs, dir: this.dir }); this.initialized = true; }
-
-  async getStatus() {
-    if (!this.initialized) return [];
-    try { return await git.statusMatrix({ fs: this.fs, dir: this.dir }); } catch { return []; }
-  }
-
-  async stageFile(filepath) { await git.add({ fs: this.fs, dir: this.dir, filepath }); }
-
-  async commit(message) { return await git.commit({ fs: this.fs, dir: this.dir, message, author: this.author }); }
-
-  async getCurrentBranch() { try { return await git.currentBranch({ fs: this.fs, dir: this.dir }); } catch { return null; } }
-
-  async listBranches() { try { return await git.listBranches({ fs: this.fs, dir: this.dir }); } catch { return []; } }
-
-  async createBranch(name) { await git.branch({ fs: this.fs, dir: this.dir, ref: name }); }
-
-  async checkout(ref) { await git.checkout({ fs: this.fs, dir: this.dir, ref }); }
-
-  async getLog(depth = 10) { try { return await git.log({ fs: this.fs, dir: this.dir, depth }); } catch { return []; } }
-
-  async writeFile(path, content) {
-    const parts = path.split('/').filter(Boolean);
-    let current = '';
-    for (let i = 0; i < parts.length - 1; i++) {
-      current = current ? `${current}/${parts[i]}` : parts[i];
-      try { await this.fs.promises.mkdir(current); } catch { }
-    }
-    await this.fs.promises.writeFile(path, content);
-  }
-
-  async importFiles(files) {
-    for (const file of files) {
-      const data = Storage.readFile(this.projectId, file.path);
-      if (data && data.content !== undefined) await this.writeFile(file.path, data.content);
-    }
-  }
-
-  parseStatusMatrix(matrix) {
-    const changes = [];
-    for (const [filepath, head, workdir, stage] of matrix) {
-      if (filepath.startsWith('.git')) continue;
-      if (head === 0 && workdir === 1 && stage === 0) changes.push({ path: filepath, status: '?', staged: false });
-      else if (head === 1 && workdir === 2 && stage === 1) changes.push({ path: filepath, status: 'M', staged: false });
-      else if (head === 1 && workdir === 2 && stage === 2) changes.push({ path: filepath, status: 'M', staged: true });
-      else if (head === 1 && workdir === 1 && stage === 2) changes.push({ path: filepath, status: 'M', staged: true });
-      else if (head === 1 && workdir === 0 && stage === 1) changes.push({ path: filepath, status: 'D', staged: false });
-      else if (head === 1 && workdir === 0 && stage === 0) changes.push({ path: filepath, status: 'D', staged: true });
-      else if (head === 0 && workdir === 0 && stage === 2) changes.push({ path: filepath, status: 'A', staged: true });
-      else if (head === 0 && workdir === 2 && stage === 2) changes.push({ path: filepath, status: 'A', staged: true });
-      else if (head === 0 && workdir === 1 && stage === 2) changes.push({ path: filepath, status: 'A', staged: true });
-      else if (head === 0 && workdir === 2 && stage === 0) changes.push({ path: filepath, status: '?', staged: false });
-    }
-    return changes;
-  }
-}
-
-// ============================================================
-// Git Panel — UI component for the Source Control sidebar view
-// ============================================================
-
-class GitPanel {
-  constructor(integration, callbacks = {}) {
-    this.git = integration;
-    this.callbacks = callbacks;
-    this.changes = [];
-    this.commits = [];
-    this.currentBranch = 'main';
-    this._bound = false;
-    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', () => this._bindEvents());
-    else this._bindEvents();
-  }
-
-  _bindEvents() {
-    if (this._bound) return;
-    this._bound = true;
-    const on = (id, evt, fn) => { const el = document.getElementById(id); if (el) el.addEventListener(evt, fn); };
-    on('btn-git-init', 'click', () => this._initRepo());
-    on('btn-git-init-inline', 'click', () => this._initRepo());
-    on('btn-git-refresh', 'click', () => this.refresh());
-    on('git-branch-bar', 'click', () => this._showBranchSwitcher());
-    on('git-branch-name', 'click', () => this._showBranchSwitcher());
-    on('git-branch-icon', 'click', () => this._showBranchSwitcher());
-    on('btn-git-commit', 'click', () => this._doCommit());
-
-    const commitInput = document.getElementById('git-commit-input');
-    if (commitInput) {
-      commitInput.addEventListener('input', () => this._updateCommitBtn());
-      commitInput.addEventListener('keydown', (e) => {
-        if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); this._doCommit(); }
-      });
-    }
-
-    const changesList = document.getElementById('git-changes-list');
-    if (changesList) {
-      changesList.addEventListener('click', (e) => {
-        const item = e.target.closest('.git-change-item');
-        if (item && item.dataset.path) this._stageFile(item.dataset.path);
-      });
-    }
-  }
-
-  async refresh() {
-    this._showLoading(true);
-    try {
-      if (!this.git.initialized) await this.git.init();
-      if (this.git.initialized) {
-        this.currentBranch = (await this.git.getCurrentBranch()) || 'main';
-        const matrix = await this.git.getStatus();
-        this.changes = this.git.parseStatusMatrix(matrix);
-        this.commits = await this.git.getLog(10);
-      }
-    } catch (e) { console.warn('Git refresh error:', e); }
-    this._showLoading(false);
-    this._render();
-  }
-
-  _render() {
-    const content = document.getElementById('git-content');
-    const uninit = document.getElementById('git-uninit');
-    const branchName = document.getElementById('git-branch-name');
-    const changesList = document.getElementById('git-changes-list');
-    const changesCount = document.getElementById('git-changes-count');
-    const commitInput = document.getElementById('git-commit-input');
-    const commitBtn = document.getElementById('btn-git-commit');
-    const commitsList = document.getElementById('git-commits-list');
-    const commitsCount = document.getElementById('git-commits-count');
-    const initialized = this.git.initialized;
-    if (content) content.style.display = initialized ? 'flex' : 'none';
-    if (uninit) uninit.style.display = initialized ? 'none' : 'block';
-    if (branchName) branchName.textContent = this.currentBranch || 'main';
-    if (commitInput) commitInput.disabled = !initialized;
-    if (!initialized) return;
-
-    if (changesList) {
-      changesList.innerHTML = '';
-      if (this.changes.length === 0) {
-        const e = document.createElement('div'); e.className = 'git-empty-msg'; e.textContent = 'No changes — clean working tree';
-        changesList.appendChild(e);
-      } else {
-        for (const ch of this.changes) {
-          const item = document.createElement('div'); item.className = 'git-change-item'; item.dataset.path = ch.path;
-          const stagedLabel = ch.staged ? '<span class="git-change-stage">staged</span>' : '';
-          item.innerHTML = `<span class="git-change-status ${ch.status}">${ch.status}</span><span class="git-change-file">${ch.path}</span>${stagedLabel}`;
-          changesList.appendChild(item);
-        }
-      }
-    }
-    if (changesCount) changesCount.textContent = `(${this.changes.length})`;
-    const hasUnstaged = this.changes.some(c => !c.staged);
-    if (commitBtn) commitBtn.disabled = !hasUnstaged;
-    this._updateCommitBtn();
-
-    if (commitsList) {
-      commitsList.innerHTML = '';
-      if (this.commits.length === 0) {
-        const e = document.createElement('div'); e.className = 'git-empty-msg'; e.textContent = 'No commits yet';
-        commitsList.appendChild(e);
-      } else {
-        for (const c of this.commits) {
-          const item = document.createElement('div'); item.className = 'git-commit-item';
-          const shortOid = c.oid.substring(0, 7);
-          const msg = (c.commit.message || '').split('\n')[0];
-          const ts = c.commit.author.timestamp * 1000;
-          item.innerHTML = `<span class="git-commit-oid">${shortOid}</span><span class="git-commit-msg">${this._escapeHtml(msg)}</span><span class="git-commit-meta">${this._timeAgo(new Date(ts))}</span>`;
-          commitsList.appendChild(item);
-        }
-      }
-    }
-    if (commitsCount) commitsCount.textContent = `(${this.commits.length})`;
-    const statusBranch = document.getElementById('status-branch');
-    if (statusBranch) statusBranch.textContent = this.currentBranch || 'local';
-  }
-
-  _updateCommitBtn() {
-    const input = document.getElementById('git-commit-input');
-    const btn = document.getElementById('btn-git-commit');
-    if (!btn) return;
-    if (!this.git.initialized || !input) { btn.disabled = true; return; }
-    btn.disabled = !input.value.trim();
-  }
-
-  async _initRepo() {
-    this._showLoading(true);
-    try {
-      const files = Storage.getProjectFilesList(this.git.projectId);
-      await this.git.initRepo();
-      await this.git.importFiles(files);
-      await this.git.commit('🎉 Initial commit');
-      await this.refresh();
-    } catch (e) { console.error('Git init error:', e); alert('Failed to initialize repository: ' + e.message); }
-    this._showLoading(false);
-  }
-
-  async _doCommit() {
-    const input = document.getElementById('git-commit-input');
-    const msg = input ? input.value.trim() : '';
-    if (!msg) return;
-    this._showLoading(true);
-    try {
-      for (const change of this.changes) { if (!change.staged) await this.git.stageFile(change.path); }
-      const sha = await this.git.commit(msg);
-      console.log(`Git commit: ${sha.substring(0, 7)} — ${msg}`);
-      if (input) input.value = '';
-      await this.refresh();
-      if (this.callbacks.onCommit) this.callbacks.onCommit();
-    } catch (e) { console.error('Commit error:', e); alert('Commit failed: ' + e.message); }
-    this._showLoading(false);
-  }
-
-  async _stageFile(path) {
-    this._showLoading(true);
-    try { await this.git.stageFile(path); await this.refresh(); } catch (e) { console.error('Stage error:', e); }
-    this._showLoading(false);
-  }
-
-  async _showBranchSwitcher() {
-    if (!this.git.initialized) return;
-    const branches = await this.git.listBranches();
-    const current = await this.git.getCurrentBranch();
-    const modal = document.getElementById('modal-overlay');
-    const title = document.getElementById('modal-title');
-    const input = document.getElementById('modal-input');
-    const confirm = document.getElementById('modal-confirm');
-    const cancel = document.getElementById('modal-cancel');
-    if (!modal) return;
-
-    title.textContent = 'Switch Branch';
-    input.style.display = 'none';
-    confirm.textContent = 'New Branch';
-    confirm._newBranchMode = true;
-    modal.style.display = 'flex';
-
-    const list = document.createElement('div');
-    list.style.cssText = 'max-height:200px;overflow-y:auto;margin: 8px 0;';
-    for (const b of branches) {
-      const item = document.createElement('div');
-      item.className = 'branch-list-item' + (b === current ? ' active' : '');
-      item.innerHTML = `<span class="branch-check">${b === current ? '✓' : ''}</span><span>${b}</span>`;
-      item.addEventListener('click', async () => {
-        if (b === current) return;
-        try {
-          await this.git.checkout(b);
-          if (this.callbacks.onBranchSwitch) this.callbacks.onBranchSwitch(b);
-          await this.refresh();
-        } catch (e) { console.error('Checkout error:', e); alert('Checkout failed: ' + e.message); }
-        close();
-      });
-      list.appendChild(item);
-    }
-    modal.querySelector('.modal-box').insertBefore(list, document.getElementById('modal-actions'));
-
-    const confirmOrig = confirm._listener || (() => {});
-    confirm._listener = async () => {
-      if (confirm._newBranchMode) {
-        input.style.display = 'block';
-        input.value = '';
-        input.placeholder = 'New branch name...';
-        confirm.textContent = 'Create';
-        confirm._newBranchMode = false;
-        input.focus();
-        input.onkeydown = async (e) => {
-          if (e.key === 'Enter' && input.value.trim()) {
-            try {
-              await this.git.createBranch(input.value.trim());
-              await this.git.checkout(input.value.trim());
-              if (this.callbacks.onBranchSwitch) this.callbacks.onBranchSwitch(input.value.trim());
-              await this.refresh();
-            } catch (e) { console.error('Branch create error:', e); }
-            close();
-          }
-        };
-      }
-    };
-    confirm.addEventListener('click', confirm._listener);
-
-    const close = () => {
-      modal.style.display = 'none';
-      input.style.display = '';
-      confirm.textContent = 'OK';
-      confirm._newBranchMode = false;
-      input.onkeydown = null;
-      list.remove();
-    };
-    cancel.addEventListener('click', close);
-  }
-
-  _showLoading(visible) {
-    const el = document.getElementById('git-loading');
-    if (el) el.style.display = visible ? 'flex' : 'none';
-  }
-
-  _timeAgo(date) {
-    const diff = Date.now() - date.getTime();
-    const mins = Math.floor(diff / 60000);
-    if (mins < 1) return 'just now';
-    if (mins < 60) return `${mins}m ago`;
-    const hrs = Math.floor(mins / 60);
-    if (hrs < 24) return `${hrs}h ago`;
-    const days = Math.floor(hrs / 24);
-    if (days < 30) return `${days}d ago`;
-    return `${Math.floor(days / 30)}mo ago`;
-  }
-
-  _escapeHtml(str) {
-    const d = document.createElement('div');
-    d.textContent = str;
-    return d.innerHTML;
-  }
-}
-
-// ============================================================
 // PocketIDE - Main Application
 // ============================================================
 
@@ -1548,9 +1158,6 @@ class PocketIDE {
     this.savedContents = new Map();
     this.fileList = [];
     this.sidebarVisible = true;
-    this.gitFS = null;
-    this.gitIntegration = null;
-    this.gitPanel = null;
     /** Native File System (null = localStorage mode) */
     this.fileSystem = null;
     /** Clipboard for copy/cut/paste: { action: 'copy'|'cut', paths: string[] } */
@@ -1573,14 +1180,11 @@ class PocketIDE {
 
     this.loadProjectFiles(this.currentProjectId);
 
-    this._initGit(this.currentProjectId);
-
     const sidebarTitle = document.getElementById('sidebar-title');
     if (sidebarTitle) sidebarTitle.textContent = project.name;
 
-    this._setupSidebarTabs();
-
     this._initMobileGestures();
+    this._initKeyboardViewport();
     let resizeTimer;
     window.addEventListener('resize', () => {
       clearTimeout(resizeTimer);
@@ -1593,7 +1197,7 @@ class PocketIDE {
       }, 200);
     });
 
-    console.log('🚀 PocketIDE initialized (standalone edition)');
+    console.log('PocketIDE initialized');
   }
 
   isNativeMode() { return this.fileSystem !== null; }
@@ -1620,7 +1224,11 @@ class PocketIDE {
       if (sidebar) sidebar.classList.add('folder-mode');
       // Update Open Folder button icon
       const openBtn = document.getElementById('btn-open-folder');
-      if (openBtn) { openBtn.textContent = '🗁'; openBtn.title = 'Close Folder'; }
+      if (openBtn) {
+        const use = openBtn.querySelector('use');
+        if (use) use.setAttribute('href', '#i-x');
+        openBtn.title = 'Close Folder';
+      }
       // Update status
       const statusBranch = document.getElementById('status-branch');
       if (statusBranch) statusBranch.textContent = fs.name;
@@ -1651,7 +1259,11 @@ class PocketIDE {
     if (folderName) { folderName.textContent = ''; folderName.style.display = 'none'; }
     if (sidebar) sidebar.classList.remove('folder-mode');
     const openBtn = document.getElementById('btn-open-folder');
-    if (openBtn) { openBtn.textContent = '📂'; openBtn.title = 'Open Folder'; }
+    if (openBtn) {
+      const use = openBtn.querySelector('use');
+      if (use) use.setAttribute('href', '#i-folder-open');
+      openBtn.title = 'Open Folder';
+    }
     const statusBranch = document.getElementById('status-branch');
     if (statusBranch) statusBranch.textContent = 'local';
     // Reload local project
@@ -1667,52 +1279,6 @@ class PocketIDE {
     } catch (e) {
       console.warn('Failed to load native files:', e);
     }
-  }
-
-  _initGit(projectId) {
-    this.gitFS = new GitFS(projectId);
-    this.gitIntegration = new GitIntegration(projectId, this.gitFS);
-    this.gitPanel = new GitPanel(this.gitIntegration, {
-      onCommit: () => { this.loadProjectFiles(projectId); },
-      onBranchSwitch: (branch) => {
-        const statusBranch = document.getElementById('status-branch');
-        if (statusBranch && !this.isNativeMode()) statusBranch.textContent = branch;
-        this.loadProjectFiles(projectId);
-      },
-      onFilesChanged: (filePaths) => {
-        this.loadProjectFiles(projectId);
-        if (filePaths) {
-          for (const fp of filePaths) {
-            const data = Storage.readFile(projectId, fp);
-            if (data && data.content !== undefined) {
-              this.fileContents.set(fp, data.content);
-              this.savedContents.set(fp, data.content);
-              const tab = this.tabManager.getTabByPath(fp);
-              if (tab && tab.active) { this.editor.setValue(data.content); this.editor.setFilename(fp); }
-            }
-          }
-        }
-      },
-    });
-    window.addEventListener('beforeunload', () => { if (this.gitFS) this.gitFS.flush(); });
-    Promise.resolve().then(() => this.gitPanel.refresh());
-  }
-
-  _setupSidebarTabs() {
-    const tabBar = document.getElementById('sidebar-tab-bar');
-    if (!tabBar) return;
-    tabBar.addEventListener('click', (e) => {
-      const btn = e.target.closest('.sidebar-tab');
-      if (!btn) return;
-      const tab = btn.dataset.tab;
-      if (!tab) return;
-      tabBar.querySelectorAll('.sidebar-tab').forEach(t => t.classList.remove('active'));
-      btn.classList.add('active');
-      document.querySelectorAll('.sidebar-view').forEach(v => v.classList.remove('active'));
-      const view = document.getElementById(`sidebar-view-${tab}`);
-      if (view) view.classList.add('active');
-      if (tab === 'git' && this.gitPanel) this.gitPanel.refresh();
-    });
   }
 
   // --- Editor ---
@@ -1917,11 +1483,6 @@ class PocketIDE {
       this.fileSystem.writeFile(path, savedContent).catch(e => console.warn('Native save error:', e));
     } else {
       Storage.writeFile(this.currentProjectId, path, savedContent);
-      if (this.gitIntegration && this.gitIntegration.initialized) {
-        this.gitIntegration.writeFile(path, savedContent).then(() => {
-          if (this.gitPanel) this.gitPanel.refresh();
-        }).catch(() => {});
-      }
     }
     console.log(`Saved: ${path}`);
   }
@@ -1931,7 +1492,6 @@ class PocketIDE {
     const files = Storage.getProjectFilesList(projectId);
     this.fileList = files;
     if (this.fileTree) this.fileTree.buildFromFileList(files);
-    if (this.gitPanel) setTimeout(() => this.gitPanel.refresh(), 100);
   }
 
   // --- UI helpers ---
@@ -2227,7 +1787,7 @@ class PocketIDE {
         const parentPath = path && this.fileList.find(f => f.path === path)
           ? path.substring(0, path.lastIndexOf('/'))
           : '';
-        this.fileTree.showInputModal('New File', 'Enter file name:', '', (name) => {
+        this.fileTree.showInputModal('New File', 'e.g. main.py, index.cpp', '', (name) => {
           if (this.isNativeMode()) {
             const fp = parentPath ? `${parentPath}/${name}` : name;
             this.fileSystem.writeFile(fp, '').then(() => this._loadNativeFiles());
@@ -2238,7 +1798,7 @@ class PocketIDE {
             this.loadProjectFiles(this.currentProjectId);
             this.openFile(fp, '');
           }
-        });
+        }, { chips: true });
         return;
       }
 
@@ -2355,6 +1915,79 @@ class PocketIDE {
     }
   }
 
+  // --- Import Files ---
+  triggerImport(mode) {
+    const input = document.getElementById(mode === 'folder' ? 'import-folder-input' : 'import-input');
+    if (input) input.click();
+  }
+
+  importFiles(fileList) {
+    if (!fileList || !fileList.length) return;
+    const files = Array.from(fileList);
+    let imported = 0, skipped = 0, quotaError = false;
+    const tasks = files.map(file => new Promise((resolve) => {
+      // Skip media files (images/videos/audio are not text-editable)
+      if (file.type && /^(image|video|audio)\//.test(file.type)) { skipped++; resolve(); return; }
+      const path = file.webkitRelativePath || file.name;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const content = typeof reader.result === 'string' ? reader.result : '';
+          // Binary files (zip/pdf/etc.) read as text contain null bytes — skip them
+          if (content.indexOf('\u0000') !== -1) { skipped++; resolve(); return; }
+          const write = () => {
+            if (this.isNativeMode()) {
+              this.fileSystem.writeFile(path, content).then(() => { imported++; }).catch(() => { skipped++; }).finally(resolve);
+            } else {
+              Storage.writeFile(this.currentProjectId, path, content);
+              imported++;
+              resolve();
+            }
+          };
+          // Ask before overwriting an existing file
+          const exists = this.isNativeMode()
+            ? null // checked asynchronously below
+            : !!Storage.readFile(this.currentProjectId, path);
+          if (this.isNativeMode()) {
+            this.fileSystem.readFile(path).then((existing) => {
+              if (existing !== null && !window.confirm(`Overwrite "${path}"?`)) { skipped++; resolve(); return; }
+              write();
+            }).catch(() => write());
+          } else if (exists && !window.confirm(`Overwrite "${path}"?`)) {
+            skipped++; resolve();
+          } else {
+            write();
+          }
+        } catch (e) {
+          if (e && e.name === 'QuotaExceededError') quotaError = true;
+          skipped++;
+          resolve();
+        }
+      };
+      reader.onerror = () => { skipped++; resolve(); };
+      reader.readAsText(file);
+    }));
+    Promise.all(tasks).then(() => {
+      this._loadNativeFiles();
+      this.loadProjectFiles(this.currentProjectId);
+      if (quotaError) alert('Storage is full — some files could not be saved. Delete old files to free up space.');
+      else if (imported > 0) console.log(`Imported ${imported} of ${imported + skipped} file(s)`);
+    });
+  }
+
+  // --- Keyboard / visual viewport (mobile) ---
+  _initKeyboardViewport() {
+    if (!window.visualViewport || !this.editor) return;
+    const apply = () => {
+      const padding = Math.max(0, window.innerHeight - window.visualViewport.height);
+      if (this.editor && this.editor.editorWrapper) {
+        this.editor.editorWrapper.style.paddingBottom = padding > 40 ? padding + 'px' : '';
+      }
+    };
+    window.visualViewport.addEventListener('resize', apply);
+    window.visualViewport.addEventListener('scroll', apply);
+  }
+
   // --- Sidebar Resize ---
   setupSidebarResize() {
     const handle = document.getElementById('sidebar-resize');
@@ -2419,11 +2052,18 @@ class PocketIDE {
       welcomeOpenBtn.addEventListener('click', () => this.openFolder());
     }
 
+    // Hide native-folder actions where the File System Access API is unavailable (mobile/WebView)
+    if (!NativeFileSystem.isSupported()) {
+      [document.getElementById('btn-open-folder'), document.getElementById('btn-welcome-open-folder')].forEach(b => { if (b) b.style.display = 'none'; });
+      const divider = document.querySelector('#welcome-content .welcome-divider');
+      if (divider) divider.style.display = 'none';
+    }
+
     // Welcome screen Create New File button
     const welcomeNewFileBtn = document.getElementById('btn-welcome-new-file');
     if (welcomeNewFileBtn) {
       welcomeNewFileBtn.addEventListener('click', () => {
-        this.fileTree.showInputModal('New File', 'Enter file name:', '', (name) => {
+        this.fileTree.showInputModal('New File', 'e.g. main.py, index.cpp', '', (name) => {
           if (this.isNativeMode()) {
             this.fileSystem.writeFile(name, '').then(() => this._loadNativeFiles());
             this.openFile(name, '');
@@ -2432,7 +2072,7 @@ class PocketIDE {
             this.loadProjectFiles(this.currentProjectId);
             this.openFile(name, '');
           }
-        });
+        }, { chips: true });
       });
     }
 
@@ -2440,7 +2080,7 @@ class PocketIDE {
     const newFileBtn = document.getElementById('btn-new-file');
     if (newFileBtn) {
       newFileBtn.addEventListener('click', () => {
-        this.fileTree.showInputModal('New File', 'Enter file name:', '', (name) => {
+        this.fileTree.showInputModal('New File', 'e.g. main.py, index.cpp', '', (name) => {
           if (this.isNativeMode()) {
             this.fileSystem.writeFile(name, '').then(() => this._loadNativeFiles());
             this.openFile(name, '');
@@ -2449,7 +2089,7 @@ class PocketIDE {
             this.loadProjectFiles(this.currentProjectId);
             this.openFile(name, '');
           }
-        });
+        }, { chips: true });
       });
     }
 
@@ -2465,6 +2105,25 @@ class PocketIDE {
           }
         });
       });
+    }
+
+    // Import buttons + inputs
+    const importBtn = document.getElementById('btn-import');
+    if (importBtn) importBtn.addEventListener('click', () => this.triggerImport('files'));
+
+    const welcomeImportBtn = document.getElementById('btn-welcome-import');
+    if (welcomeImportBtn) welcomeImportBtn.addEventListener('click', () => this.triggerImport('files'));
+
+    const importInput = document.getElementById('import-input');
+    if (importInput) importInput.addEventListener('change', (e) => { this.importFiles(e.target.files); e.target.value = ''; });
+
+    const importFolderInput = document.getElementById('import-folder-input');
+    if (importFolderInput) importFolderInput.addEventListener('change', (e) => { this.importFiles(e.target.files); e.target.value = ''; });
+
+    // Hide folder-import entry on browsers that don't support directory picking
+    const bsImportFolder = document.getElementById('bs-import-folder');
+    if (bsImportFolder && !('webkitdirectory' in document.createElement('input'))) {
+      bsImportFolder.style.display = 'none';
     }
 
     // Menu button (desktop)
@@ -2519,6 +2178,12 @@ class PocketIDE {
             }
           });
           break;
+        case 'import-files':
+          this.triggerImport('files');
+          break;
+        case 'import-folder':
+          this.triggerImport('folder');
+          break;
         case 'collapse-all':
           if (this.fileTree) { this.fileTree.expandedFolders.clear(); this.fileTree.render(); }
           break;
@@ -2534,7 +2199,7 @@ class PocketIDE {
           this.toggleSidebar();
           break;
         case 'about':
-          alert('🚀 PocketIDE v1.0\nA mobile-first code editor\n\nAll files saved locally in your browser.');
+          alert('PocketIDE v1.0 — a mobile-first code editor\n\nAll files are stored locally on this device. No server, no account needed.');
           break;
       }
     });

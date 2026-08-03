@@ -1,152 +1,108 @@
 <div align="center">
 
-# 🚀 PocketIDE
+# PocketIDE
 
-> **A modern, mobile-first IDE for the browser.**
+> **A mobile-first code editor that runs entirely offline — create files, import code, and edit anywhere.**
 
-[![Contributors](https://img.shields.io/badge/contributors-welcome-brightgreen.svg?style=flat-square)](CONTRIBUTING.md)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square)](LICENSE)
-[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=flat-square)](CONTRIBUTING.md)
 [![JavaScript](https://img.shields.io/badge/JavaScript-ES2022-F7DF1E?logo=javascript&style=flat-square)](https://developer.mozilla.org/en-US/docs/Web/JavaScript)
-[![Discussions](https://img.shields.io/badge/discussions-join-8B5CF6?style=flat-square)](CONTRIBUTING.md)
+[![No Server](https://img.shields.io/badge/backend-none-brightgreen.svg?style=flat-square)](index.html)
 
-**Code anywhere. Build anything.**
+**Code anywhere. Build anything. Nothing leaves your device.**
 
 </div>
 
 ---
 
-## 📖 About
+## What is this?
 
-PocketIDE is a powerful browser-based development environment. It comes in **two editions**:
+PocketIDE is a **standalone code editor + file manager** that runs in any browser (and as an Android APK). There is **no server, no backend, no account** — every file you create or import is stored locally on your device.
 
-1. **Standalone Edition** — A fully self-contained IDE that runs entirely in the browser with no backend. Features a custom regex-based syntax highlighter, file explorer, multi-tab editing, and localStorage persistence.
-2. **Server Edition** — A full-stack version with a **CodeMirror 6** editor, Node.js/Express backend, user authentication, project management, and file storage on disk.
+It's intentionally simple:
 
-Our goal is to create the PocketIDE we've always wanted to use.
+- **Create files** — any name, any extension. `main.py`, `index.cpp`, `script.js`, `style.css`… all work.
+- **Import files** — pull files (or an entire folder) from your device into the project.
+- **Edit** — a lightweight editor with syntax highlighting for many languages, line numbers, tabs, and dark/light themes.
 
 ## ✨ Features
 
-| Category | Features |
-|----------|----------|
-| 📁 Project Management | File explorer, project creation, multi-tab editing |
-| 📝 Code Editor | Syntax highlighting, auto-indent, bracket matching |
-| 🔌 Extensions | Plugin API system, custom themes |
-| 🌙 Themes | Dark & light themes, customizable |
-| 👤 Authentication | User registration & login (server edition) |
+| Category | Details |
+|----------|---------|
+| 📄 File manager | Create, rename, duplicate, delete, copy/cut/paste files & folders |
+| ⬇️ Import | Import single files or whole folders from the device |
+| 📝 Editor | Syntax highlighting, auto-indent, pinch-to-zoom font size (mobile) |
+| 📑 Tabs | Multi-tab editing with dirty indicators & keyboard shortcuts |
+| 🌙 Themes | Dark & light themes |
+| 📱 Mobile-first | Touch-friendly targets, edge-swipe sidebar, bottom-sheet menu, safe-area support |
+| 🔌 Offline | 100% local — works with no internet connection at all |
 
-## 🛠️ Tech Stack
+### Supported languages
 
-| Layer | Technology |
-|-------|-----------|
-| **Frontend (Standalone)** | Vanilla HTML + CSS + JavaScript |
-| **Frontend (Server)** | CodeMirror 6 (via esbuild) + Vanilla JS |
-| **Backend** | Node.js + Express 5 (REST API) |
-| **Auth** | bcryptjs + JWT |
-| **Storage (Standalone)** | localStorage |
-| **Storage (Server)** | Filesystem-based JSON store |
-| **Build** | None (standalone) / esbuild (editor) |
-
-### Languages Used
-
-- **JavaScript** (ES2022) — 100% of application code
-- **HTML** — UI markup
-- **CSS** — Styling
-
-## 🏗️ Project Structure
-
-```
-pocketide/
-├── index.html              # Standalone edition entry point
-├── app.js                  # Standalone edition core logic
-├── styles.css              # Standalone edition styles
-│
-├── editor/                 # CodeMirror 6 edition
-│   ├── src/
-│   │   ├── editor.js       # Editor initialization & lifecycle
-│   │   ├── file-tree.js    # File explorer component
-│   │   ├── tabs.js         # Tab management
-│   │   ├── themes.js       # Theme system
-│   │   ├── languages.js    # Language definitions
-│   │   ├── bridge.js       # WebView bridge (for mobile embedding)
-│   │   ├── api-client.js   # Backend API client
-│   │   ├── plugin-api.js   # Plugin system API
-│   │   └── index.html      # Editor page
-│   └── build.mjs           # esbuild configuration
-│
-├── backend/                # Node.js backend
-│   ├── src/
-│   │   ├── server.js       # Express server entry
-│   │   ├── config.js       # Configuration
-│   │   ├── routes/         # API routes
-│   │   ├── middleware/     # Auth & error middleware
-│   │   ├── services/       # Business logic
-│   │   └── storage/        # File-based JSON store
-│   └── package.json
-│
-├── plugins/                # Community plugins directory
-└── docs/                   # Documentation
-```
-
-## 🚧 Project Status
-
-⚠️ **Active development**
-
-### Current Status
-
-- ✅ **Standalone edition** — Fully functional (file explorer, editor, tabs, themes)
-- ✅ **Server backend** — Authentication, project CRUD, file operations
-- ✅ **CodeMirror 6 editor** — Syntax highlighting for multiple languages
-- ✅ **Plugin API** — Extensible plugin system
-- ⬜ **Integrated terminal**
-- ⬜ **Git integration**
-- ⬜ **AI assistant**
-- ⬜ **Cloud workspaces**
+JavaScript, TypeScript, JSX/TSX, Python, HTML, CSS/SCSS, JSON, Markdown, C, C++, C#, Go, Rust, Java, Ruby, PHP, Swift, Kotlin, Dart, Shell, YAML, TOML, XML, SVG, SQL, Lua, Vue, and more — unknown extensions open as plain text, so **any** file type works.
 
 ## 🚀 Quick Start
 
-### Standalone Edition
+### Web
 
-Just open `index.html` in your browser — no setup required!
+Open `index.html` in any modern browser. That's it — no build step, no dependencies.
 
-### Server Edition
+### Android (APK)
 
-```bash
-# Install backend dependencies
-cd backend
-npm install
+An Android build lives in the `mobileideapk` folder:
 
-# Start the server
-npm start
+- `PocketIDE.apk` — the installable app (WebView wrapper + this app, fully offline)
+- `index.html` — a welcome page with the README and an **Install APK** button
 
-# Build the CodeMirror 6 editor
-cd ../editor
-npm install
-npm run build
+1. Copy `PocketIDE.apk` to your Android phone (or serve it from the welcome page).
+2. Open it — allow "Install unknown apps" when prompted.
+3. Done. Files are stored in the app's local storage.
+
+> The APK is **unsigned for distribution** — it's signed with a local debug-style key so it can be sideloaded. To publish on the Play Store you'd sign with your own key.
+
+## ⌨️ Shortcuts
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+N` | New file |
+| `Ctrl+S` | Save |
+| `Ctrl+W` | Close tab |
+| `Ctrl+B` | Toggle sidebar |
+| `Ctrl+O` | Open folder (desktop) |
+| `F2` | Rename |
+| `Tab` / `Shift+Tab` | Indent / un-indent |
+
+On mobile, tap the **☰ menu** for the action sheet, or swipe from the left edge to open the file explorer.
+
+## 📁 Project Structure
+
+```
+pocketide/
+├── index.html    # Single-page app markup + SVG icon set
+├── app.js        # Editor, file tree, tabs, storage, import — all logic
+├── styles.css    # Mobile-first styling
+└── brand/        # Logo source (SVG) and generated PNG icons
 ```
 
-## 🤝 Community
+## 🔧 Rebuilding the APK
 
-This project is built **by developers, for developers**. We welcome everyone.
+The build is a plain WebView wrapper around the same three files. To rebuild it yourself, follow the steps in `mobileideapk/BUILD.md` (it only needs a JDK and Android build-tools — no Gradle/Android Studio required).
+
+## 🤝 Community
 
 | Resource | Link |
 |----------|------|
 | 📖 **Contributing Guide** | [CONTRIBUTING.md](CONTRIBUTING.md) |
-| 🔌 **Plugin Development** | [plugins/README.md](plugins/README.md) |
 | 🐛 **Report a Bug** | [Bug Report](.github/ISSUE_TEMPLATE/bug_report.md) |
 | ✨ **Request a Feature** | [Feature Request](.github/ISSUE_TEMPLATE/feature_request.md) |
-| 🔑 **Submit a Plugin** | [Plugin Submission](.github/ISSUE_TEMPLATE/plugin_submission.md) |
-| 💬 **Start a Discussion** | [GitHub Discussions](https://github.com/youssefhamrougit/pocketIDE/discussions) |
 | 🛡️ **Security Policy** | [SECURITY.md](SECURITY.md) |
 | 📜 **Code of Conduct** | [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) |
-| ❓ **Getting Help** | [SUPPORT.md](SUPPORT.md) |
 
 ## 📄 License
 
-This project is licensed under the MIT License. See [LICENSE](LICENSE) for details.
+MIT — see [LICENSE](LICENSE).
 
 ---
 
 <div align="center">
-Built with ❤️ by the community.
+Built with ❤️ — no servers were harmed.
 </div>
