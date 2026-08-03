@@ -155,120 +155,851 @@ const LanguageDetector = {
 // ============================================================
 
 const SyntaxHighlighter = {
+  // ------------------------------------------------------------
+  // Single-pass tokenizer.
+  //
+  // Walks the RAW source once with one combined regex per
+  // language and escapes text as it is emitted. It never runs
+  // patterns over already-escaped HTML, so typing < > & can
+  // never corrupt the editor markup (the old regex pipeline
+  // matched inside its own <span> tags — that's what caused
+  // the "bad stuff" when typing < or >).
+  // ------------------------------------------------------------
+
+  _escape(s) {
+    return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  },
+
+  _compile(rules, flags) {
+    const src = rules.map(r => `(${r[0].source})`).join('|');
+    const re = new RegExp(src, 'g' + (flags || ''));
+    return { re, classes: rules.map(r => r[1]) };
+  },
+
   highlight(code, filename) {
+    if (!code) return '';
+    if (code.length > 250000) return this._escape(code);
     const lang = LanguageDetector.detect(filename).name;
-    const escaped = code
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;');
+    const def = this.defs[lang];
+    if (!def) return this._escape(code);
 
-    if (!code.trim()) return escaped;
+    const re = def.re;
+    const classes = def.classes;
+    re.lastIndex = 0;
+    const out = [];
+    let last = 0;
+    let m;
+    while ((m = re.exec(code)) !== null) {
+      if (m.index > last) out.push(this._escape(code.slice(last, m.index)));
+      let cls = '';
+      for (let i = 1; i < m.length; i++) {
+        if (m[i] !== undefined) { cls = classes[i - 1]; break; }
+      }
+      out.push(cls ? `<span class="${cls}">${this._escape(m[0])}</span>` : this._escape(m[0]));
+      last = re.lastIndex;
+      if (m[0].length === 0) re.lastIndex++;
+    }
+    if (last < code.length) out.push(this._escape(code.slice(last)));
+    return out.join('');
+  },
 
-    switch (lang) {
-      case 'JavaScript':
-      case 'JSX':
-      case 'TypeScript':
-      case 'TSX':
-        return this.highlightJS(escaped);
-      case 'HTML':
-        return this.highlightHTML(escaped);
-      case 'CSS':
-        return this.highlightCSS(escaped);
-      case 'SCSS':
-        return this.highlightCSS(escaped);
-      case 'C++':
-      case 'C':
-      case 'C#':
-      case 'C/C++ Header':
-      case 'C++ Header':
-        return this.highlightC(escaped);
-      case 'SQL':
-        return this.highlightSQL(escaped);
-      case 'Python':
-        return this.highlightPython(escaped);
-      case 'JSON':
-        return this.highlightJSON(escaped);
-      case 'Markdown':
-        return this.highlightMarkdown(escaped);
-      default:
-        return escaped;
+  // ---- shared token fragments (no capture groups inside) ----
+  frag: {
+    strDQ: /"(?:[^"\\\n]|\\.)*"/,
+    strSQ: /'(?:[^'\\\n]|\\.)*'/,
+    strBQ: /`(?:[^`\\]|\\.)*`/,
+    strPY3: /"""[\s\S]*?"""|'''[\s\S]*?'''/,
+    lcmt: /\/\/[^\n]*/,
+    bcmt: /\/\*[\s\S]*?\*\//,
+    hcmt: /#[^\n]*/,
+    sqlcmt: /--[^\n]*/,
+    htmlcmt: /<!--[\s\S]*?-->/,
+    numC: /\b\d[\d_]*(?:\.\d+)?(?:[eE][+-]?\d+)?(?:[uUlLfF]{0,2})?\b|\b0[xX][0-9a-fA-F]+\b|\b0[bB][01]+\b/,
+    numJS: /\b\d[\d_]*(?:\.\d+)?(?:[eE][+-]?\d+)?\b|\b0[xX][0-9a-fA-F]+\b|\b0[bB][01]+\b|\b0[oO][0-7]+\b/,
+    numDec: /\b\d[\d_]*(?:\.\d+)?(?:[eE][+-]?\d+)?\b/,
+    fnCallJS: /[A-Za-z_$][\w$]*(?=\s*\()/,
+    fnCall: /[A-Za-z_][\w]*(?=\s*\()/,
+  },
+
+  defs: {},
+};
+
+// ---------------- JavaScript family ----------------
+const JS_RULES = [
+  [/(?:"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`)/, 'hl-string'],
+  [/\/\/[^\n]*|\/\*[\s\S]*?\*\//, 'hl-comment'],
+  [/\b(?:as|async|await|break|case|catch|class|const|continue|debugger|default|delete|do|else|export|extends|finally|for|from|function|get|if|import|in|instanceof|let|new|of|return|set|static|super|switch|this|throw|try|typeof|var|void|while|with|yield|true|false|null|undefined)\b/, 'hl-keyword'],
+  [/\b(?:Math|JSON|console|window|document|globalThis|Array|Object|String|Number|Boolean|Date|RegExp|Map|Set|WeakMap|WeakSet|Promise|Error|TypeError|SyntaxError|ReferenceError|RangeError|Symbol|BigInt|Intl|Proxy|Reflect|parseInt|parseFloat|isNaN|isFinite|fetch|setTimeout|setInterval|clearTimeout|clearInterval|requestAnimationFrame|URL|URLSearchParams|Blob|FormData|AbortController|structuredClone|queueMicrotask)\b/, 'hl-builtin'],
+  [/\b\d[\d_]*(?:\.\d+)?(?:[eE][+-]?\d+)?\b|\b0[xX][0-9a-fA-F]+\b|\b0[bB][01]+\b|\b0[oO][0-7]+\b/, 'hl-number'],
+  [/[A-Za-z_$][\w$]*(?=\s*\()/, 'hl-func'],
+];
+const TS_RULES = JS_RULES.slice(0, 2).concat([
+  [/\b(?:interface|type|enum|namespace|declare|readonly|abstract|implements|private|protected|public|keyof|infer|satisfies|string|number|boolean|any|unknown|never|void|object|bigint|symbol|is|asserts|module)\b/, 'hl-keyword'],
+], JS_RULES.slice(2));
+const JSX_RULES = JS_RULES.slice(0, 2).concat([
+  [/<\/?[A-Za-z][\w.-]*/, 'hl-tag'],
+  [/[A-Za-z_:][\w:.-]*(?=\s*=)/, 'hl-attr'],
+], JS_RULES.slice(2));
+const TSX_RULES = TS_RULES.slice(0, 2).concat([
+  [/<\/?[A-Za-z][\w.-]*/, 'hl-tag'],
+  [/[A-Za-z_:][\w:.-]*(?=\s*=)/, 'hl-attr'],
+], TS_RULES.slice(2));
+
+SyntaxHighlighter.defs['JavaScript'] = SyntaxHighlighter._compile(JS_RULES);
+SyntaxHighlighter.defs['TypeScript'] = SyntaxHighlighter._compile(TS_RULES);
+SyntaxHighlighter.defs['JSX'] = SyntaxHighlighter._compile(JSX_RULES);
+SyntaxHighlighter.defs['TSX'] = SyntaxHighlighter._compile(TSX_RULES);
+
+// ---------------- C family ----------------
+const C_KEYWORDS = /\b(?:alignas|alignof|and|and_eq|asm|auto|bitand|bitor|bool|break|case|catch|char|char8_t|char16_t|char32_t|class|compl|concept|const|consteval|constexpr|constinit|const_cast|continue|co_await|co_return|co_yield|decltype|default|delete|do|double|dynamic_cast|else|enum|explicit|export|extern|false|float|for|friend|goto|if|inline|int|long|mutable|namespace|new|noexcept|not|not_eq|nullptr|operator|or|or_eq|private|protected|public|register|reinterpret_cast|requires|return|short|signed|sizeof|static|static_assert|static_cast|struct|switch|template|this|thread_local|throw|true|try|typedef|typeid|typename|union|unsigned|using|virtual|void|volatile|wchar_t|while|xor|xor_eq)\b/;
+const C_TYPES = /\b(?:string|vector|map|set|list|pair|tuple|optional|variant|string_view|size_t|ssize_t|ptrdiff_t|int8_t|int16_t|int32_t|int64_t|uint8_t|uint16_t|uint32_t|uint64_t|FILE|std|cout|cin|cerr|endl|printf|scanf|malloc|calloc|realloc|free|strlen|strcpy|memcpy|memset|abs|fabs|sqrt|pow|rand|srand)\b/;
+const C_RULES = [
+  [/"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'/, 'hl-string'],
+  [/\/\/[^\n]*|\/\*[\s\S]*?\*\//, 'hl-comment'],
+  [/(?:(?:^|(?<=\n))[ \t]*#[^\n]*)/, 'hl-keyword'],
+  [C_KEYWORDS, 'hl-keyword'],
+  [C_TYPES, 'hl-type'],
+  [/\b\d[\d_]*(?:\.\d+)?(?:[eE][+-]?\d+)?(?:[uUlLfF]{0,2})?\b|\b0[xX][0-9a-fA-F]+\b|\b0[bB][01]+\b/, 'hl-number'],
+  [/[A-Za-z_][\w]*(?=\s*\()/, 'hl-func'],
+];
+SyntaxHighlighter.defs['C++'] = SyntaxHighlighter._compile(C_RULES);
+SyntaxHighlighter.defs['C'] = SyntaxHighlighter._compile(C_RULES);
+SyntaxHighlighter.defs['C/C++ Header'] = SyntaxHighlighter._compile(C_RULES);
+SyntaxHighlighter.defs['C++ Header'] = SyntaxHighlighter._compile(C_RULES);
+SyntaxHighlighter.defs['C#'] = SyntaxHighlighter._compile([
+  [/@"(?:[^"]|"")*"|"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'/, 'hl-string'],
+  [/\/\/[^\n]*|\/\*[\s\S]*?\*\//, 'hl-comment'],
+  [/\b(?:abstract|as|base|bool|break|byte|case|catch|char|checked|class|const|continue|decimal|default|delegate|do|double|else|enum|event|explicit|extern|false|finally|fixed|float|for|foreach|goto|if|implicit|in|int|interface|internal|is|lock|long|namespace|new|null|object|operator|out|override|params|private|protected|public|readonly|ref|return|sbyte|sealed|short|sizeof|stackalloc|static|string|struct|switch|this|throw|true|try|typeof|uint|ulong|unchecked|unsafe|ushort|using|virtual|void|volatile|while|async|await|record|init|required|var|dynamic)\b/, 'hl-keyword'],
+  [/\b(?:List|Dictionary|HashSet|Queue|Stack|IEnumerable|IList|ICollection|IDictionary|Exception|ArgumentException|ArgumentNullException|InvalidOperationException|Console|Math|String|DateTime|Task|Thread|Action|Func|Object|Array)\b/, 'hl-type'],
+  [/\b\d[\d_]*(?:\.\d+)?(?:[eE][+-]?\d+)?[fFdDmM]?\b|\b0[xX][0-9a-fA-F]+\b/, 'hl-number'],
+  [/[A-Za-z_][\w]*(?=\s*\()/, 'hl-func'],
+]);
+
+// ---------------- Python ----------------
+SyntaxHighlighter.defs['Python'] = SyntaxHighlighter._compile([
+  [/"""[\s\S]*?"""|'''[\s\S]*?'''|"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'/, 'hl-string'],
+  [/#[^\n]*/, 'hl-comment'],
+  [/@[A-Za-z_][\w.]*/, 'hl-keyword'],
+  [/\b(?:and|as|assert|async|await|break|case|class|continue|def|del|elif|else|except|finally|for|from|global|if|import|in|is|lambda|match|nonlocal|not|or|pass|raise|return|try|while|with|yield|True|False|None|self|cls)\b/, 'hl-keyword'],
+  [/\b(?:print|len|range|type|str|int|float|bool|list|dict|set|tuple|object|super|isinstance|issubclass|enumerate|zip|map|filter|sorted|reversed|sum|min|max|abs|round|pow|divmod|open|input|repr|format|bytes|bytearray|memoryview|frozenset|complex|hash|id|callable|hasattr|getattr|setattr|delattr|vars|dir|help|Exception|ValueError|TypeError|KeyError|IndexError|AttributeError|NameError|StopIteration|FileNotFoundError|RuntimeError|ZeroDivisionError|ArithmeticError|__init__|__name__|__main__|__file__)\b/, 'hl-builtin'],
+  [/\b\d[\d_]*(?:\.\d+)?(?:[eE][+-]?\d+)?j?\b|\b0[xX][0-9a-fA-F]+\b|\b0[bB][01]+\b|\b0[oO][0-7]+\b/, 'hl-number'],
+  [/[A-Za-z_][\w]*(?=\s*\()/, 'hl-func'],
+]);
+
+// ---------------- HTML / XML / SVG / Vue ----------------
+const HTML_RULES = [
+  [/<!--[\s\S]*?-->/, 'hl-comment'],
+  [/<!DOCTYPE[^>]*>/i, 'hl-keyword'],
+  [/<\/?[A-Za-z][\w.-]*/, 'hl-tag'],
+  [/&(?:#[xX]?\d+|[A-Za-z][A-Za-z0-9]+);/, 'hl-attr'],
+  [/"[^"\n]*"|'[^'\n]*'/, 'hl-string'],
+  [/[A-Za-z_:][\w:.-]*(?=\s*=)/, 'hl-attr'],
+];
+SyntaxHighlighter.defs['HTML'] = SyntaxHighlighter._compile(HTML_RULES);
+SyntaxHighlighter.defs['XML'] = SyntaxHighlighter._compile(HTML_RULES);
+SyntaxHighlighter.defs['SVG'] = SyntaxHighlighter._compile(HTML_RULES);
+SyntaxHighlighter.defs['Vue'] = SyntaxHighlighter._compile(HTML_RULES);
+
+// ---------------- CSS / SCSS / Sass ----------------
+const CSS_RULES = [
+  [/\/\*[\s\S]*?\*\//, 'hl-comment'],
+  [/"[^"\n]*"|'[^'\n]*'/, 'hl-string'],
+  [/@[\w-]+/, 'hl-keyword'],
+  [/#[0-9a-fA-F]{3,8}\b/, 'hl-number'],
+  [/#[A-Za-z_][\w-]*/, 'hl-builtin'],
+  [/\.[A-Za-z_][\w-]*/, 'hl-builtin'],
+  [/\b\d[\d.]*(?:px|em|rem|vh|vw|vmin|vmax|%|s|ms|deg|fr|ch|ex|pt|cm|mm|dvh|svh|lvh)?\b/, 'hl-number'],
+  [/[\w-]+(?=\s*:)/, 'hl-attr'],
+];
+SyntaxHighlighter.defs['CSS'] = SyntaxHighlighter._compile(CSS_RULES);
+SyntaxHighlighter.defs['SCSS'] = SyntaxHighlighter._compile(CSS_RULES);
+SyntaxHighlighter.defs['Sass'] = SyntaxHighlighter._compile(CSS_RULES);
+
+// ---------------- SQL ----------------
+SyntaxHighlighter.defs['SQL'] = SyntaxHighlighter._compile([
+  [/--[^\n]*|\/\*[\s\S]*?\*\//, 'hl-comment'],
+  [/'[^'\n]*'|"[^"\n]*"/, 'hl-string'],
+  [/\b(?:select|from|where|insert|into|values|update|set|delete|create|table|drop|alter|join|left|right|inner|outer|full|cross|on|as|and|or|not|null|group|by|order|having|limit|offset|union|all|distinct|primary|key|foreign|references|index|view|procedure|function|trigger|begin|commit|rollback|cascade|case|when|then|else|end|exists|between|like|in|is|asc|desc|add|column|default|check|constraint|database|schema|grant|revoke|transaction|with|recursive|over|partition|rank|row_number|count|sum|avg|min|max|if|while|loop|declare|return|call|show|use|describe)\b/i, 'hl-keyword'],
+  [/\b\d[\d_]*(?:\.\d+)?\b/, 'hl-number'],
+  [/[A-Za-z_][\w]*(?=\s*\()/, 'hl-func'],
+]);
+
+// ---------------- JSON ----------------
+SyntaxHighlighter.defs['JSON'] = SyntaxHighlighter._compile([
+  [/"(?:[^"\\\n]|\\.)*"(?=\s*:)/, 'hl-attr'],
+  [/"(?:[^"\\\n]|\\.)*"/, 'hl-string'],
+  [/\b(?:true|false|null)\b/, 'hl-keyword'],
+  [/\b-?\d[\d_]*(?:\.\d+)?(?:[eE][+-]?\d+)?\b/, 'hl-number'],
+]);
+
+// ---------------- Markdown ----------------
+SyntaxHighlighter.defs['Markdown'] = SyntaxHighlighter._compile([
+  [/^#{1,6}[^\n]*/, 'hl-keyword'],
+  [/^(\*{3,}|-{3,}|_{3,})[^\n]*/, 'hl-number'],
+  [/\[[^\]\n]+\]\([^)\s]+\)/, 'hl-string'],
+  [/`[^`\n]+`/, 'hl-builtin'],
+  [/^[ \t]*(?:[-*+]|\d+[.)])\s+[^\n]*/, 'hl-number'],
+  [/^>[^\n]*/, 'hl-keyword'],
+  [/\*\*[^*\n]+\*\*|__[^_\n]+__/, 'hl-string'],
+  [/\*[^*\n]+\*|_[^_\n]+_/, 'hl-string'],
+], 'm');
+
+// ---------------- Shell ----------------
+SyntaxHighlighter.defs['Shell'] = SyntaxHighlighter._compile([
+  [/#[^\n]*/, 'hl-comment'],
+  [/"[^"\n]*"|'[^'\n]*'|`[^`\n]*`/, 'hl-string'],
+  [/\b(?:if|then|else|elif|fi|for|while|until|do|done|case|esac|function|in|select|time|export|local|readonly|return|exit|echo|cd|ls|mkdir|rm|cp|mv|sudo|grep|sed|awk|cat|touch|chmod|chown|source|alias|unset|set|shift|exec|wait|let|declare|read|printf|pwd|curl|wget|git|node|npm|npx|yarn|python|python3|pip|pip3|make|tar|zip|unzip|find|head|tail|sort|uniq|wc|cut|tr|paste|file|which|man|history|kill|jobs|bg|fg|true|false)\b/, 'hl-keyword'],
+  [/\b\d[\d_]*(?:\.\d+)?\b/, 'hl-number'],
+]);
+
+// ---------------- YAML / TOML ----------------
+SyntaxHighlighter.defs['YAML'] = SyntaxHighlighter._compile([
+  [/#[^\n]*/, 'hl-comment'],
+  [/"[^"\n]*"|'[^'\n]*'/, 'hl-string'],
+  [/[A-Za-z_][\w-]*(?=\s*:)/, 'hl-attr'],
+  [/&[\w-]+|\*[\w-]+/, 'hl-builtin'],
+  [/\b(?:true|false|null|yes|no|on|off|~)\b/, 'hl-keyword'],
+  [/\b\d[\d_]*(?:\.\d+)?\b/, 'hl-number'],
+]);
+SyntaxHighlighter.defs['TOML'] = SyntaxHighlighter._compile([
+  [/#[^\n]*/, 'hl-comment'],
+  [/"[^"\n]*"|'[^'\n]*'/, 'hl-string'],
+  [/\[\[?[^\]]+\]\]?/, 'hl-keyword'],
+  [/[A-Za-z_][\w-]*(?=\s*=)/, 'hl-attr'],
+  [/\b(?:true|false)\b/, 'hl-keyword'],
+  [/\b\d[\d_]*(?:\.\d+)?\b/, 'hl-number'],
+]);
+
+// ---------------- Rust ----------------
+SyntaxHighlighter.defs['Rust'] = SyntaxHighlighter._compile([
+  [/"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\u\{[0-9a-fA-F]+\}|\\[nrt'"\\])'/, 'hl-string'],
+  [/\/\/[^\n]*|\/\*[\s\S]*?\*\//, 'hl-comment'],
+  [/'[A-Za-z_]\w*/, 'hl-type'],
+  [/\b(?:as|async|await|break|const|continue|crate|dyn|else|enum|extern|false|fn|for|if|impl|in|let|loop|match|mod|move|mut|pub|ref|return|self|Self|static|struct|super|trait|true|type|unsafe|use|where|while|yield|box)\b/, 'hl-keyword'],
+  [/\b(?:u8|u16|u32|u64|u128|usize|i8|i16|i32|i64|i128|isize|f32|f64|bool|char|str|String|Vec|Option|Some|None|Result|Ok|Err|Box|Rc|Arc|HashMap|BTreeMap|HashSet|Iterator)\b/, 'hl-type'],
+  [/\b\d[\d_]*(?:\.\d+)?(?:[eE][+-]?\d+)?[fFiIuU]?\b|\b0[xX][0-9a-fA-F]+\b|\b0[bB][01]+\b/, 'hl-number'],
+  [/[A-Za-z_][\w]*(?=\s*\()/, 'hl-func'],
+]);
+
+// ---------------- Go ----------------
+SyntaxHighlighter.defs['Go'] = SyntaxHighlighter._compile([
+  [/"(?:[^"\\\n]|\\.)*"|`[^`\n]*`/, 'hl-string'],
+  [/\/\/[^\n]*|\/\*[\s\S]*?\*\//, 'hl-comment'],
+  [/\b(?:break|default|func|interface|select|case|defer|go|map|struct|chan|else|goto|package|switch|const|fallthrough|if|range|type|continue|for|import|return|var|true|false|nil|iota)\b/, 'hl-keyword'],
+  [/\b(?:string|bool|byte|rune|int|int8|int16|int32|int64|uint|uint8|uint16|uint32|uint64|uintptr|float32|float64|complex64|complex128|error|any)\b/, 'hl-type'],
+  [/\b\d[\d_]*(?:\.\d+)?(?:[eE][+-]?\d+)?\b|\b0[xX][0-9a-fA-F]+\b/, 'hl-number'],
+  [/[A-Za-z_][\w]*(?=\s*\()/, 'hl-func'],
+]);
+
+// ---------------- Java ----------------
+SyntaxHighlighter.defs['Java'] = SyntaxHighlighter._compile([
+  [/"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'/, 'hl-string'],
+  [/\/\/[^\n]*|\/\*[\s\S]*?\*\//, 'hl-comment'],
+  [/@[A-Za-z_][\w.]*/, 'hl-keyword'],
+  [/\b(?:abstract|assert|boolean|break|byte|case|catch|char|class|const|continue|default|do|double|else|enum|extends|final|finally|float|for|goto|if|implements|import|instanceof|int|interface|long|native|new|package|private|protected|public|return|short|static|strictfp|super|switch|synchronized|this|throw|throws|transient|try|void|volatile|while|true|false|null|var|record|sealed|permits|yield)\b/, 'hl-keyword'],
+  [/\b(?:String|Integer|Long|Double|Float|Boolean|Character|Byte|Short|Object|System|Math|List|ArrayList|Map|HashMap|Set|HashSet|Collection|Arrays|Collections|Exception|RuntimeException|IllegalArgumentException|NullPointerException|IOException|File|Scanner|PrintStream|StringBuilder|Thread|Runnable)\b/, 'hl-type'],
+  [/\b\d[\d_]*(?:\.\d+)?[fFdDlL]?\b|\b0[xX][0-9a-fA-F]+\b/, 'hl-number'],
+  [/[A-Za-z_][\w]*(?=\s*\()/, 'hl-func'],
+]);
+
+// ---------------- Ruby ----------------
+SyntaxHighlighter.defs['Ruby'] = SyntaxHighlighter._compile([
+  [/"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'/, 'hl-string'],
+  [/#[^\n]*/, 'hl-comment'],
+  [/:[A-Za-z_]\w*/, 'hl-builtin'],
+  [/\b(?:alias|and|begin|break|case|class|def|defined|do|else|elsif|end|ensure|false|for|if|in|module|next|nil|not|or|redo|rescue|retry|return|self|super|then|true|undef|unless|until|when|while|yield|require|require_relative|include|extend|attr_reader|attr_writer|attr_accessor)\b/, 'hl-keyword'],
+  [/\b\d[\d_]*(?:\.\d+)?\b|\b0[xX][0-9a-fA-F]+\b/, 'hl-number'],
+  [/[A-Za-z_][\w]*[!?]?(?=\s*\()/, 'hl-func'],
+]);
+
+// ---------------- PHP ----------------
+SyntaxHighlighter.defs['PHP'] = SyntaxHighlighter._compile([
+  [/"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'/, 'hl-string'],
+  [/\/\/[^\n]*|\/\*[\s\S]*?\*\/|#[^\n]*/, 'hl-comment'],
+  [/\$[A-Za-z_]\w*/, 'hl-builtin'],
+  [/\b(?:abstract|and|array|as|break|callable|case|catch|class|clone|const|continue|declare|default|do|echo|else|elseif|empty|enddeclare|endfor|endforeach|endif|endswitch|endwhile|enum|exit|extends|final|finally|fn|for|foreach|function|global|goto|if|implements|include|include_once|instanceof|insteadof|interface|isset|list|match|namespace|new|or|print|private|protected|public|readonly|require|require_once|return|static|switch|throw|trait|try|unset|use|var|while|xor|yield|true|false|null|void)\b/, 'hl-keyword'],
+  [/\b\d[\d_]*(?:\.\d+)?\b|\b0[xX][0-9a-fA-F]+\b/, 'hl-number'],
+  [/[A-Za-z_][\w]*(?=\s*\()/, 'hl-func'],
+]);
+
+// ---------------- Swift ----------------
+SyntaxHighlighter.defs['Swift'] = SyntaxHighlighter._compile([
+  [/"(?:[^"\\\n]|\\.)*"/, 'hl-string'],
+  [/\/\/[^\n]*|\/\*[\s\S]*?\*\//, 'hl-comment'],
+  [/\b(?:associatedtype|class|deinit|enum|extension|fileprivate|func|import|init|inout|internal|let|open|operator|private|protocol|public|rethrows|static|struct|subscript|typealias|var|break|case|continue|default|defer|do|else|fallthrough|for|guard|if|in|repeat|return|switch|where|while|as|catch|is|super|self|Self|throw|throws|try|true|false|nil|any|some|await|async|actor|nonisolated|convenience|dynamic|final|lazy|mutating|optional|override|required|weak)\b/, 'hl-keyword'],
+  [/\b(?:Int|UInt|Float|Double|Bool|String|Character|Array|Dictionary|Set|Optional|Error|Void|Any|NSObject|UIView|UIViewController|URL|Data|Date)\b/, 'hl-type'],
+  [/\b\d[\d_]*(?:\.\d+)?(?:[eE][+-]?\d+)?\b|\b0[xX][0-9a-fA-F]+\b/, 'hl-number'],
+  [/[A-Za-z_][\w]*(?=\s*\()/, 'hl-func'],
+]);
+
+// ---------------- Kotlin ----------------
+SyntaxHighlighter.defs['Kotlin'] = SyntaxHighlighter._compile([
+  [/"""[\s\S]*?"""|"(?:[^"\\\n]|\\.)*"/, 'hl-string'],
+  [/\/\/[^\n]*|\/\*[\s\S]*?\*\//, 'hl-comment'],
+  [/\b(?:as|break|class|continue|do|else|false|for|fun|if|in|interface|is|null|object|package|return|super|this|throw|true|try|typealias|typeof|val|var|when|while|by|catch|constructor|delegate|dynamic|field|file|finally|get|import|init|param|property|receiver|set|setparam|where|actual|abstract|annotation|companion|const|crossinline|data|enum|expect|external|final|infix|inline|inner|internal|lateinit|noinline|open|operator|out|override|private|protected|public|reified|sealed|suspend|tailrec|vararg)\b/, 'hl-keyword'],
+  [/\b(?:String|Int|Long|Double|Float|Boolean|Char|Byte|Short|Unit|Any|Nothing|List|MutableList|Map|MutableMap|Set|MutableSet|Array|Pair|Triple)\b/, 'hl-type'],
+  [/\b\d[\d_]*(?:\.\d+)?(?:[eE][+-]?\d+)?[fFdDlL]?\b|\b0[xX][0-9a-fA-F]+\b/, 'hl-number'],
+  [/[A-Za-z_][\w]*(?=\s*\()/, 'hl-func'],
+]);
+
+// ---------------- Dart ----------------
+SyntaxHighlighter.defs['Dart'] = SyntaxHighlighter._compile([
+  [/"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'/, 'hl-string'],
+  [/\/\/[^\n]*|\/\*[\s\S]*?\*\//, 'hl-comment'],
+  [/\b(?:abstract|as|assert|async|await|break|case|catch|class|const|continue|default|deferred|do|dynamic|else|enum|export|extends|extension|external|factory|false|final|finally|for|Function|get|hide|if|implements|import|in|interface|is|late|library|mixin|new|null|on|operator|part|required|rethrow|return|set|show|static|super|switch|sync|this|throw|true|try|typedef|var|void|while|with|yield)\b/, 'hl-keyword'],
+  [/\b(?:int|double|num|bool|String|Object|dynamic|List|Map|Set|Iterable|Future|Stream|void|Never|Null)\b/, 'hl-type'],
+  [/\b\d[\d_]*(?:\.\d+)?(?:[eE][+-]?\d+)?\b|\b0[xX][0-9a-fA-F]+\b/, 'hl-number'],
+  [/[A-Za-z_][\w]*(?=\s*\()/, 'hl-func'],
+]);
+
+
+// ============================================================
+// Autocomplete — file-type-aware suggestions dropdown
+// ============================================================
+
+const Autocomplete = {
+  aliases: {
+    'JSX': 'JavaScript', 'TSX': 'TypeScript', 'TypeScript': 'JavaScript',
+    'C': 'C++', 'C#': 'C#', 'C/C++ Header': 'C++', 'C++ Header': 'C++',
+    'SCSS': 'CSS', 'Sass': 'CSS', 'XML': 'HTML', 'SVG': 'HTML', 'Vue': 'HTML',
+  },
+
+  data: {
+    'JavaScript': {
+      keywords: ['const','let','var','function','return','if','else','for','while','do','switch','case','break','continue','class','extends','new','this','async','await','try','catch','finally','throw','import','from','export','default','typeof','instanceof','in','of','null','undefined','true','false','delete','void','yield','static','super','get','set','arrow'],
+      builtins: ['console.log','console.error','console.warn','console.table','document.getElementById','document.querySelector','document.querySelectorAll','document.createElement','window.addEventListener','window.setInterval','fetch','JSON.parse','JSON.stringify','Math.random','Math.floor','Math.max','Math.min','Math.round','Date.now','setTimeout','setInterval','clearTimeout','Promise.resolve','Promise.all','Array.from','Array.isArray','Object.keys','Object.values','Object.entries','Object.assign','parseInt','parseFloat','isNaN','String','Number','Boolean'],
+      snippets: {
+        'for': 'for (let i = 0; i < ${n}; i++) {\n  ${0}\n}',
+        'forof': 'for (const ${item} of ${items}) {\n  ${0}\n}',
+        'if': 'if (${cond}) {\n  ${0}\n}',
+        'else': '} else {\n  ${0}\n}',
+        'fn': 'function ${name}(${params}) {\n  ${0}\n}',
+        'arrow': '(${params}) => {\n  ${0}\n}',
+        'log': 'console.log(${0});',
+        'try': 'try {\n  ${0}\n} catch (err) {\n  console.error(err);\n}',
+        'fetch': 'fetch(${url})\n  .then(res => res.json())\n  .then(data => {\n    ${0}\n  });',
+      },
+    },
+    'Python': {
+      keywords: ['def','class','return','if','elif','else','for','while','in','not','and','or','try','except','finally','with','as','import','from','lambda','yield','pass','break','continue','global','nonlocal','assert','raise','del','is','None','True','False','async','await','match','case','self'],
+      builtins: ['print','len','range','type','str','int','float','bool','list','dict','set','tuple','object','super','isinstance','enumerate','zip','map','filter','sorted','sum','min','max','abs','round','open','input','repr','format','bytes','hash','id','vars','dir','ValueError','TypeError','KeyError','IndexError','Exception','__init__','__name__','__main__'],
+      snippets: {
+        'def': 'def ${name}(${params}):\n    ${0}\n',
+        'class': 'class ${Name}:\n    def __init__(self, ${args}):\n        ${0}\n',
+        'if': 'if ${cond}:\n    ${0}\n',
+        'for': 'for ${item} in ${items}:\n    ${0}\n',
+        'while': 'while ${cond}:\n    ${0}\n',
+        'main': 'if __name__ == "__main__":\n    ${0}\n',
+        'try': 'try:\n    ${0}\nexcept ${Exception} as e:\n    print(e)\n',
+      },
+    },
+    'C++': {
+      keywords: ['int','char','float','double','bool','void','auto','const','static','struct','class','public','private','protected','namespace','using','return','if','else','for','while','do','switch','case','break','continue','new','delete','this','nullptr','true','false','template','typename','typedef','enum','union','virtual','override','inline','extern','sizeof','unsigned','signed','long','short','string','vector','map','set','include','main'],
+      builtins: ['std::cout','std::cin','std::endl','std::string','std::vector','std::map','std::set','printf','scanf','malloc','free','sizeof','abs','sqrt','pow','max','min','strlen','strcpy','memcpy','memset','fopen','fclose','fread','fwrite'],
+      snippets: {
+        'main': 'int main() {\n  ${0}\n  return 0;\n}',
+        'for': 'for (int i = 0; i < ${n}; i++) {\n  ${0}\n}',
+        'if': 'if (${cond}) {\n  ${0}\n}',
+        'while': 'while (${cond}) {\n  ${0}\n}',
+        'class': 'class ${Name} {\npublic:\n  ${Name}() {}\n  ${0}\n};',
+        'fn': '${type} ${name}(${params}) {\n  ${0}\n}',
+        'cout': 'std::cout << ${0} << std::endl;',
+      },
+    },
+    'C#': {
+      keywords: ['namespace','using','class','public','private','protected','internal','static','void','int','string','bool','double','float','var','const','readonly','return','if','else','for','foreach','while','switch','case','break','continue','new','this','base','null','true','false','try','catch','finally','throw','async','await','record','enum','interface','delegate','event','get','set','in','out','ref'],
+      builtins: ['Console.WriteLine','Console.ReadLine','Console.Write','Math.Max','Math.Min','Math.Abs','Math.Pow','Math.Sqrt','DateTime.Now','string.Format','List','Dictionary','HashSet','Task.Run','String.IsNullOrEmpty','String.Join','Convert.ToInt32','Enumerable.Range','LINQ','Where','Select','ToList','FirstOrDefault'],
+      snippets: {
+        'main': 'static void Main(string[] args) {\n  ${0}\n}',
+        'class': 'public class ${Name} {\n  ${0}\n}',
+        'for': 'for (int i = 0; i < ${n}; i++) {\n  ${0}\n}',
+        'foreach': 'foreach (var ${item} in ${items}) {\n  ${0}\n}',
+        'if': 'if (${cond}) {\n  ${0}\n}',
+        'wl': 'Console.WriteLine(${0});',
+      },
+    },
+    'HTML': {
+      keywords: ['div','span','p','a','img','ul','ol','li','table','tr','td','th','form','input','button','select','option','textarea','label','header','footer','nav','main','section','article','aside','h1','h2','h3','h4','h5','h6','br','hr','script','style','link','meta','title','body','head','html','class','id','href','src','style'],
+      builtins: ['<div class=""></div>','<a href=""></a>','<img src="" alt=""/>','<input type="text" />','<button></button>','<ul><li></li></ul>','<table>','<form>','<script>','<link rel="stylesheet" href="">'],
+      snippets: {
+        'doctype': '<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8" />\n  <meta name="viewport" content="width=device-width, initial-scale=1.0" />\n  <title>${0}</title>\n</head>\n<body>\n\n</body>\n</html>',
+        'div': '<div class="${cls}">\n  ${0}\n</div>',
+        'a': '<a href="${url}">${0}</a>',
+        'img': '<img src="${src}" alt="${alt}" />',
+        'script': '<script>\n  ${0}\n</script>',
+        'link': '<link rel="stylesheet" href="${href}" />',
+      },
+    },
+    'CSS': {
+      keywords: ['color','background','background-color','margin','padding','border','border-radius','font-size','font-family','font-weight','display','position','top','right','bottom','left','width','height','min-width','max-width','min-height','max-height','overflow','flex','flex-direction','justify-content','align-items','gap','grid','grid-template-columns','gap','opacity','z-index','transition','transform','box-shadow','text-align','text-decoration','line-height','cursor','pointer','hover','active','focus','media'],
+      builtins: ['rgba','rgb','hsl','calc','var','clamp','min','max','linear-gradient','radial-gradient','translate','scale','rotate','bold','italic','underline','center','flex-start','flex-end','space-between','space-around','relative','absolute','fixed','sticky'],
+      snippets: {
+        'flex': 'display: flex;\njustify-content: center;\nalign-items: center;',
+        'media': '@media (max-width: 768px) {\n  ${0}\n}',
+        'hover': '.${sel}:hover {\n  ${0}\n}',
+        'font': 'font-family: ${family}, sans-serif;\nfont-size: ${size}px;\ncolor: ${color};',
+      },
+    },
+    'SQL': {
+      keywords: ['select','from','where','insert','into','values','update','set','delete','create','table','drop','alter','join','left','right','inner','outer','on','as','and','or','not','null','group','by','order','having','limit','offset','union','all','distinct','primary','key','foreign','references','index','view','count','sum','avg','min','max','between','like','in','is','exists','case','when','then','else','end','begin','commit','rollback'],
+      builtins: ['COUNT(*)','SUM(column)','AVG(column)','MIN(column)','MAX(column)','NOW()','UPPER(col)','LOWER(col)','LENGTH(col)','COALESCE(col, 0)','DISTINCT col','ORDER BY col DESC','GROUP BY col','LIMIT 10'],
+      snippets: {
+        'selectall': 'SELECT * FROM ${table}\nWHERE ${cond}\nLIMIT 100;',
+        'insert': 'INSERT INTO ${table} (${cols})\nVALUES (${vals});',
+        'update': 'UPDATE ${table}\nSET ${col} = ${val}\nWHERE ${cond};',
+        'delete': 'DELETE FROM ${table}\nWHERE ${cond};',
+        'createtable': 'CREATE TABLE ${name} (\n  id INTEGER PRIMARY KEY,\n  ${0}\n);',
+        'join': 'SELECT *\nFROM ${a}\nJOIN ${b} ON ${a}.${key} = ${b}.${key}\nWHERE ${cond};',
+      },
+    },
+    'JSON': {
+      keywords: ['true','false','null'],
+      builtins: ['"id":','"name":','"type":','"value":','"data":','"items":[]','"status":','"message":','"createdAt":','"updatedAt":'],
+      snippets: {
+        'obj': '{\n  "${0}": \n}',
+        'arr': '[\n  ${0}\n]',
+        'item': '{\n  "id": 1,\n  "name": "${0}"\n}',
+      },
+    },
+    'Markdown': {
+      keywords: ['#','##','###','####','-','1.','*','**','`','>','[link](url)','![alt](img)'],
+      builtins: ['**bold**','*italic*','`code`','[text](url)','![alt](image)','- item','1. item','> quote','```code```'],
+      snippets: {
+        'heading': '## ${0}',
+        'link': '[${text}](${url})',
+        'code': '```${lang}\n${0}\n```',
+      },
+    },
+    'Shell': {
+      keywords: ['echo','if','then','else','elif','fi','for','while','until','do','done','case','esac','function','return','exit','export','local','readonly','cd','ls','mkdir','rm','cp','mv','cat','touch','chmod','grep','sed','awk','find','curl','wget','git','node','npm','sudo','true','false','source','alias','set','unset'],
+      builtins: ['$HOME','$PATH','$USER','$PWD','$0','$1','$@','$?','$#','$(command)','`command`','2>&1','> file','>> file','|'],
+      snippets: {
+        'if': 'if [ ${cond} ]; then\n  ${0}\nfi',
+        'for': 'for ${i} in ${items}; do\n  ${0}\ndone',
+        'fn': '${name}() {\n  ${0}\n}',
+        'echo': 'echo "${0}"',
+      },
+    },
+    'Go': {
+      keywords: ['package','import','func','return','if','else','for','range','switch','case','break','continue','var','const','type','struct','interface','map','chan','go','defer','select','nil','true','false','make','len','cap','append','new'],
+      builtins: ['fmt.Println','fmt.Printf','fmt.Sprintf','strings.Join','strings.Split','strconv.Atoi','strconv.Itoa','time.Now','os.Open','os.ReadFile','io.ReadAll','json.Marshal','json.Unmarshal','http.Get','error','any'],
+      snippets: {
+        'main': 'package main\n\nimport "fmt"\n\nfunc main() {\n\t${0}\n}',
+        'fn': 'func ${name}(${params}) ${ret} {\n\t${0}\n}',
+        'for': 'for i := 0; i < ${n}; i++ {\n\t${0}\n}',
+        'range': 'for ${i}, ${v} := range ${items} {\n\t${0}\n}',
+        'iferr': 'if err != nil {\n\treturn err\n}',
+      },
+    },
+    'Rust': {
+      keywords: ['fn','let','mut','const','static','return','if','else','for','while','loop','match','struct','enum','impl','trait','use','mod','pub','crate','self','Self','super','where','as','in','ref','move','async','await','dyn','true','false','Option','Result','Some','None','Ok','Err'],
+      builtins: ['println!','print!','eprintln!','format!','vec!','String::from','format!','vec!','iter','collect','unwrap','expect','map','filter','fold','clone','to_string','as_str','push','len','is_empty'],
+      snippets: {
+        'main': 'fn main() {\n    ${0}\n}',
+        'fn': 'fn ${name}(${params}) -> ${ret} {\n    ${0}\n}',
+        'for': 'for ${i} in 0..${n} {\n    ${0}\n}',
+        'match': 'match ${val} {\n    ${pat} => {\n        ${0}\n    }\n    _ => {}\n}',
+        'impl': 'impl ${Type} {\n    pub fn ${new}() -> Self {\n        ${0}\n    }\n}',
+      },
+    },
+    'Java': {
+      keywords: ['public','private','protected','static','final','class','interface','extends','implements','void','int','long','double','float','boolean','char','byte','short','String','return','if','else','for','while','do','switch','case','break','continue','new','this','super','null','true','false','try','catch','finally','throw','throws','import','package','enum','record','var','abstract'],
+      builtins: ['System.out.println','System.out.print','System.err.println','Math.max','Math.min','Math.abs','Math.pow','Math.sqrt','Math.random','String.format','String.valueOf','Integer.parseInt','Integer.toString','List.of','Arrays.asList','ArrayList','HashMap','HashSet','Objects.equals','StringBuilder','Thread.sleep','Exception','RuntimeException'],
+      snippets: {
+        'main': 'public static void main(String[] args) {\n  ${0}\n}',
+        'class': 'public class ${Name} {\n  ${0}\n}',
+        'for': 'for (int i = 0; i < ${n}; i++) {\n  ${0}\n}',
+        'if': 'if (${cond}) {\n  ${0}\n}',
+        'sop': 'System.out.println(${0});',
+        'try': 'try {\n  ${0}\n} catch (Exception e) {\n  e.printStackTrace();\n}',
+      },
+    },
+    'PHP': {
+      keywords: ['function','return','if','else','elseif','for','foreach','while','switch','case','break','continue','class','public','private','protected','static','extends','implements','interface','new','this','self','parent','namespace','use','require','require_once','include','include_once','echo','print','true','false','null','isset','empty','unset','array','as','=>','try','catch','finally','throw','match','fn','var','global','const','abstract','final','readonly','enum'],
+      builtins: ['$_GET','$_POST','$_SERVER','$_SESSION','$_COOKIE','$_FILES','$this','array_map','array_filter','count','strlen','str_replace','explode','implode','json_encode','json_decode','file_get_contents','file_put_contents','mysqli','PDO','header','die','exit','var_dump','print_r'],
+      snippets: {
+        'php': '<?php\n${0}\n?>',
+        'fn': 'function ${name}(${params}) {\n  ${0}\n}',
+        'foreach': 'foreach (${items} as ${key} => ${value}) {\n  ${0}\n}',
+        'echo': 'echo ${0};',
+      },
+    },
+    'Swift': {
+      keywords: ['let','var','func','return','if','else','guard','for','while','repeat','switch','case','break','continue','class','struct','enum','protocol','extension','init','deinit','static','override','import','public','private','internal','fileprivate','open','self','super','nil','true','false','throw','throws','try','catch','async','await','actor','in','as','is','where'],
+      builtins: ['print','String','Int','Double','Float','Bool','Array','Dictionary','Set','Optional','map','filter','reduce','compactMap','flatMap','sorted','joined','split','lowercased','uppercased','count','isEmpty','append','removeAll','first','last','min','max','abs','round','Date','UUID','DispatchQueue.main.async'],
+      snippets: {
+        'main': 'import Foundation\n\nfunc main() {\n  ${0}\n}\nmain()',
+        'func': 'func ${name}(${params}) -> ${ret} {\n  ${0}\n}',
+        'class': 'class ${Name} {\n  ${0}\n}',
+        'if': 'if ${cond} {\n  ${0}\n}',
+        'for': 'for ${item} in ${items} {\n  ${0}\n}',
+      },
+    },
+    'Kotlin': {
+      keywords: ['fun','val','var','class','object','interface','data','sealed','enum','companion','init','constructor','return','if','else','when','for','while','do','break','continue','true','false','null','is','in','as','try','catch','finally','throw','import','package','public','private','protected','internal','override','open','abstract','suspend','async','await','by','get','set','lateinit'],
+      builtins: ['println','print','String','Int','Long','Double','Float','Boolean','Char','Array','List','MutableList','Map','MutableMap','Set','Pair','Triple','Any','Unit','Nothing','map','filter','forEach','sorted','joinToString','firstOrNull','lastOrNull','take','drop','repeat','require','check','error','TODO'],
+      snippets: {
+        'main': 'fun main() {\n  ${0}\n}',
+        'fun': 'fun ${name}(${params}): ${ret} {\n  ${0}\n}',
+        'class': 'class ${Name}(${params}) {\n  ${0}\n}',
+        'if': 'if (${cond}) {\n  ${0}\n}',
+        'when': 'when (${value}) {\n  ${case} -> {\n    ${0}\n  }\n  else -> {}\n}',
+      },
+    },
+    'Dart': {
+      keywords: ['void','var','final','const','class','extends','implements','mixin','abstract','enum','return','if','else','for','while','do','switch','case','break','continue','true','false','null','this','super','new','import','export','part','library','typedef','Function','dynamic','is','as','in','try','catch','finally','throw','async','await','yield','get','set','static','late','required','factory'],
+      builtins: ['print','String','int','double','num','bool','List','Map','Set','Iterable','Future','Stream','Object','dynamic','map','where','forEach','toList','join','split','length','isEmpty','add','remove','contains','first','last','isEmpty','isNotEmpty','toString','toInt','toDouble','DateTime.now','Duration','Timer','Uri','jsonDecode','jsonEncode'],
+      snippets: {
+        'main': 'void main() {\n  ${0}\n}',
+        'fn': '${ret} ${name}(${params}) {\n  ${0}\n}',
+        'class': 'class ${Name} {\n  ${Name}(this.${field});\n\n  ${0}\n}',
+        'if': 'if (${cond}) {\n  ${0}\n}',
+        'for': 'for (var i = 0; i < ${n}; i++) {\n  ${0}\n}',
+      },
+    },
+    'Ruby': {
+      keywords: ['def','end','class','module','return','if','unless','else','elsif','case','when','while','until','for','do','begin','rescue','ensure','raise','yield','self','super','true','false','nil','and','or','not','require','require_relative','include','extend','attr_reader','attr_writer','attr_accessor','new','puts','print','each','map','select','reject'],
+      builtins: ['puts','print','p','gets','Array','Hash','String','Integer','Float','Symbol','Range','Object','Time','File.open','File.read','File.write','Dir.glob','JSON.parse','JSON.generate','puts "#{}"','each_with_index','select','map','inject','reduce','include?','empty?','length','size','join','split','chomp','to_s','to_i','to_f','to_sym'],
+      snippets: {
+        'def': 'def ${name}(${params})\n  ${0}\nend',
+        'class': 'class ${Name}\n  ${0}\nend',
+        'each': '${items}.each do |${item}|\n  ${0}\nend',
+        'if': 'if ${cond}\n  ${0}\nend',
+      },
+    },
+  },
+
+  suggest(filename, prefix, docWords) {
+    const lang = LanguageDetector.detect(filename).name;
+    const key = this.aliases[lang] || lang;
+    const data = this.data[key];
+    const out = [];
+    const seen = new Set();
+    const p = prefix.toLowerCase();
+    const push = (label, insert, kind) => {
+      if (seen.has(label) || !label) return;
+      if (!label.toLowerCase().startsWith(p)) return;
+      seen.add(label);
+      out.push({ label, insert: insert !== undefined ? insert : label, kind });
+    };
+    if (data) {
+      (data.keywords || []).forEach(k => push(k, k, 'kw'));
+      (data.builtins || []).forEach(b => push(b, b, 'bi'));
+      Object.entries(data.snippets || {}).forEach(([k, tpl]) => push(k, tpl, 'sn'));
+    }
+    // contextual: identifiers already used in this document (skip the partial word being typed)
+    const kwSet = new Set(data ? data.keywords : []);
+    if (docWords) {
+      docWords.forEach(w => {
+        if (w.length > 1 && w.toLowerCase() !== p && !kwSet.has(w) && !/^\d+$/.test(w)) push(w, w, 'id');
+      });
+    }
+    if (out.length === 0) return out;
+    const rank = { sn: 0, kw: 1, id: 2, bi: 3 };
+    out.sort((a, b) => {
+      const ae = a.label.toLowerCase() === p ? 0 : a.label.toLowerCase().startsWith(p) ? 1 : 2;
+      const be = b.label.toLowerCase() === p ? 0 : b.label.toLowerCase().startsWith(p) ? 1 : 2;
+      if (ae !== be) return ae - be;
+      if (rank[a.kind] !== rank[b.kind]) return rank[a.kind] - rank[b.kind];
+      if (a.label.length !== b.label.length) return a.label.length - b.label.length;
+      return a.label.localeCompare(b.label);
+    });
+    return out.slice(0, 14);
+  },
+};
+
+// ============================================================
+// AutocompleteBox — the floating dropdown UI
+// ============================================================
+
+class AutocompleteBox {
+  constructor() {
+    this.el = document.createElement('div');
+    this.el.className = 'ac-box';
+    this.el.style.display = 'none';
+    document.body.appendChild(this.el);
+    this.items = [];
+    this.active = -1;
+    this.ctx = null;
+    this._onClick = (e) => {
+      const li = e.target.closest('.ac-item');
+      if (li) this.accept(parseInt(li.dataset.i, 10));
+    };
+    this.el.addEventListener('mousedown', (e) => e.preventDefault()); // keep textarea focus
+    this.el.addEventListener('click', this._onClick);
+  }
+
+  isOpen() { return this.el.style.display !== 'none'; }
+
+  show(ctx) {
+    this.ctx = ctx;
+    this.items = ctx.suggestions;
+    this.active = 0;
+    this._render();
+    this.el.style.display = 'block';
+    this._position(ctx.editor);
+  }
+
+  close() {
+    if (!this.isOpen()) return;
+    this.el.style.display = 'none';
+    this.items = [];
+    this.ctx = null;
+    this.active = -1;
+  }
+
+  next() {
+    if (!this.items.length) return;
+    this.active = (this.active + 1) % this.items.length;
+    this._highlightActive();
+  }
+
+  prev() {
+    if (!this.items.length) return;
+    this.active = (this.active - 1 + this.items.length) % this.items.length;
+    this._highlightActive();
+  }
+
+  accept(index) {
+    if (!this.ctx) return;
+    const i = index !== undefined ? index : this.active;
+    const item = this.items[i];
+    if (!item) { this.close(); return; }
+    const { editor, prefix } = this.ctx;
+    const ta = editor.textarea;
+    const pos = ta.selectionStart;
+    const start = pos - prefix.length;
+    const rest = ta.value.slice(pos);
+    const insert = item.insert;
+    const ph = insert.indexOf('${0}');
+    let out, cursor;
+    if (ph !== -1) {
+      out = insert.slice(0, ph) + insert.slice(ph + 4).replace(/\$\{\d+\}/g, '');
+      cursor = start + ph;
+    } else {
+      out = insert;
+      cursor = start + out.length;
+    }
+    ta.value = ta.value.slice(0, start) + out + rest;
+    ta.selectionStart = ta.selectionEnd = cursor;
+    editor.content = ta.value;
+    editor._updateHighlight();
+    editor._updateLineNumbers();
+    editor._emit('change', editor.content);
+    this.close();
+    ta.focus();
+  }
+
+  _render() {
+    this.el.innerHTML = '';
+    this.items.forEach((item, i) => {
+      const li = document.createElement('div');
+      li.className = 'ac-item' + (i === this.active ? ' active' : '');
+      li.dataset.i = i;
+      const kind = document.createElement('span');
+      kind.className = 'ac-kind';
+      kind.textContent = { sn: 'SNIP', kw: 'KEY', id: 'VAR', bi: 'API' }[item.kind] || 'KEY';
+      const label = document.createElement('span');
+      label.className = 'ac-label';
+      label.textContent = item.label;
+      li.appendChild(kind);
+      li.appendChild(label);
+      this.el.appendChild(li);
+    });
+  }
+
+  _highlightActive() {
+    const items = this.el.querySelectorAll('.ac-item');
+    items.forEach((li, i) => li.classList.toggle('active', i === this.active));
+    const act = items[this.active];
+    if (act) act.scrollIntoView({ block: 'nearest' });
+  }
+
+  _position(editor) {
+    const ta = editor.textarea;
+    const cs = getComputedStyle(ta);
+    const mirror = document.createElement('div');
+    mirror.style.cssText = 'position:fixed;left:0;top:0;visibility:hidden;pointer-events:none;white-space:pre;';
+    ['fontFamily','fontSize','fontWeight','fontStyle','fontVariant','letterSpacing','wordSpacing','lineHeight','textIndent','textTransform','paddingTop','paddingRight','paddingBottom','paddingLeft','borderTopWidth','borderRightWidth','borderBottomWidth','borderLeftWidth','boxSizing','tabSize'].forEach(p => mirror.style[p] = cs[p]);
+    const pre = document.createElement('pre');
+    pre.textContent = ta.value.slice(0, ta.selectionStart).replace(/\r\n/g, '\n').replace(/\n/g, '\u200b');
+    const span = document.createElement('span');
+    span.textContent = 'x';
+    pre.appendChild(span);
+    mirror.appendChild(pre);
+    document.body.appendChild(mirror);
+    const caret = span.getBoundingClientRect();
+    document.body.removeChild(mirror);
+
+    const box = this.el.getBoundingClientRect();
+    let left = caret.left;
+    const maxLeft = window.innerWidth - box.width - 8;
+    left = Math.max(8, Math.min(left, Math.max(8, maxLeft)));
+    let top = caret.bottom + 4;
+    if (top + box.height > window.innerHeight - 8) top = Math.max(8, caret.top - box.height - 4);
+    this.el.style.left = left + 'px';
+    this.el.style.top = top + 'px';
+  }
+}
+
+// ============================================================
+// Problem Detector — finds bugs as you type
+// ============================================================
+
+const Problems = {
+  check(code, filename) {
+    if (!code || !code.trim()) return [];
+    const lang = LanguageDetector.detect(filename).name;
+    const cfg = this._cfgFor(lang);
+    let problems = this._scan(code, cfg);
+    if (lang === 'Python') this._checkPython(code, problems);
+    else if (lang === 'JSON') this._checkJSON(code, problems);
+    else if (lang === 'HTML' || lang === 'XML' || lang === 'SVG' || lang === 'Vue') this._checkTags(code, problems);
+    else if (lang === 'JavaScript' || lang === 'TypeScript' || lang === 'JSX' || lang === 'TSX') this._checkJS(code, problems);
+    // dedupe
+    const seen = new Set();
+    problems = problems.filter(p => {
+      const k = p.line + ':' + p.col + ':' + p.message;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+    problems.sort((a, b) => a.line - b.line || a.col - b.col);
+    return problems;
+  },
+
+  _cfgFor(lang) {
+    if (lang === 'Python' || lang === 'Ruby' || lang === 'Shell' || lang === 'YAML' || lang === 'TOML') return { line: ['#'], block: [] };
+    if (lang === 'SQL') return { line: ['--'], block: [['/*', '*/']] };
+    if (lang === 'HTML' || lang === 'XML' || lang === 'SVG' || lang === 'Vue') return { line: [], block: [['<!--', '-->']] };
+    return { line: ['//'], block: [['/*', '*/']] };
+  },
+
+  _lineOf(code, index) { return code.slice(0, index).split('\n').length; },
+  _colOf(code, index) { const b = code.slice(0, index); return index - b.lastIndexOf('\n'); },
+
+  _scan(code, cfg) {
+    const problems = [];
+    const stack = [];
+    const lineMarks = cfg.line;
+    const blockMarks = cfg.block;
+    let line = 1, col = 0;
+    let inStr = null, inLine = null, inBlock = null;
+    let i = 0;
+    const n = code.length;
+    const isQuote = (c) => c === '"' || c === "'" || c === '`';
+    while (i < n) {
+      const c = code[i];
+      if (c === '\n') { line++; col = 0; } else col++;
+
+      if (inLine) { if (c === '\n') inLine = null; i++; continue; }
+      if (inBlock) {
+        if (code.startsWith(inBlock, i)) { inBlock = null; i += inBlock.length; continue; }
+        i++; continue;
+      }
+      if (inStr) {
+        if (c === '\\') { i += 2; continue; }
+        if (inStr.length > 1) {
+          if (code.startsWith(inStr, i)) { inStr = null; i += inStr.length; continue; }
+        } else if (c === inStr) { inStr = null; i++; continue; }
+        i++; continue;
+      }
+
+      let matched = false;
+      for (const mk of lineMarks) {
+        if (code.startsWith(mk, i)) { inLine = mk; i += mk.length; matched = true; break; }
+      }
+      if (matched) continue;
+      for (const bm of blockMarks) {
+        if (code.startsWith(bm[0], i)) { inBlock = bm[1]; i += bm[0].length; matched = true; break; }
+      }
+      if (matched) continue;
+
+      if (isQuote(c)) {
+        if (c === '"' && code.startsWith('"""', i)) { inStr = '"""'; i += 3; continue; }
+        if (c === "'" && code.startsWith("'''", i)) { inStr = "'''"; i += 3; continue; }
+        inStr = c; i++; continue;
+      }
+      if (c === ')' || c === ']' || c === '}') {
+        const want = c === ')' ? '(' : c === ']' ? '[' : '{';
+        if (stack.length && stack[stack.length - 1].ch === want) stack.pop();
+        else problems.push({ line, col, severity: 'error', message: `Unmatched '${c}'` });
+      } else if (c === '(' || c === '[' || c === '{') {
+        stack.push({ ch: c, line, col });
+      }
+      i++;
+    }
+    if (inStr) problems.push({ line, col: col + 1, severity: 'error', message: `Unterminated string — missing closing ${inStr.length > 1 ? 'triple quote' : inStr}` });
+    if (inBlock) problems.push({ line, col, severity: 'error', message: 'Unclosed block comment — missing closing marker' });
+    stack.forEach(s => problems.push({ line: s.line, col: s.col, severity: 'warning', message: `Unclosed '${s.ch}'` }));
+    return problems;
+  },
+
+  _checkPython(code, problems) {
+    const lines = code.split('\n');
+    lines.forEach((ln, idx) => {
+      const indent = ln.match(/^[ \t]+/);
+      if (indent && indent[0].includes(' ') && indent[0].includes('\t')) {
+        problems.push({ line: idx + 1, col: 1, severity: 'warning', message: 'Mixed tabs and spaces in indentation' });
+      }
+      const t = ln.trim().replace(/#.*$/, '').trimEnd();
+      if (!t) return;
+      const m = t.match(/^(def|class|if|elif|else|for|while|try|except|finally|with|match|case)\b/);
+      if (m && !t.endsWith(':')) {
+        problems.push({ line: idx + 1, col: 1, severity: 'warning', message: `${m[1]} block is missing a trailing ':'` });
+      }
+    });
+  },
+
+  _checkJSON(code, problems) {
+    try { JSON.parse(code); }
+    catch (e) {
+      const m = String(e.message).match(/position (\d+)/);
+      let line = 1, col = 1;
+      if (m) {
+        const pos = parseInt(m[1], 10);
+        const before = code.slice(0, pos);
+        line = before.split('\n').length;
+        col = pos - before.lastIndexOf('\n');
+      }
+      problems.push({ line, col: Math.max(1, col), severity: 'error', message: 'Invalid JSON — ' + e.message });
     }
   },
 
-  highlightJS(code) {
-    code = code.replace(/('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|`(?:[^`\\]|\\.)*`)/g, '<span class="hl-string">$1</span>');
-    code = code.replace(/\/\/.*$/gm, '<span class="hl-comment">$&</span>');
-    code = code.replace(/\/\*[\s\S]*?\*\//g, '<span class="hl-comment">$&</span>');
-    const keywords = /\b(as|async|await|break|case|catch|class|const|continue|debugger|default|delete|do|else|export|extends|finally|for|from|function|if|import|in|instanceof|let|new|of|return|static|super|switch|this|throw|try|typeof|var|void|while|with|yield)\b/g;
-    code = code.replace(keywords, '<span class="hl-keyword">$1</span>');
-    code = code.replace(/\b(\d+\.?\d*)\b/g, '<span class="hl-number">$1</span>');
-    code = code.replace(/\b(Math|JSON|console|window|document|Array|Object|String|Number|Boolean|Date|RegExp|Map|Set|Promise|Error)\b/g, '<span class="hl-builtin">$1</span>');
-    return code;
+  _voidTags: new Set(['area','base','br','col','embed','hr','img','input','link','meta','param','source','track','wbr']),
+
+  _checkTags(code, problems) {
+    const src = code.replace(/<!--[\s\S]*?-->/g, '');
+    const stack = [];
+    const re = /<\/?([a-zA-Z][\w-]*)(?:\s[^>]*)?\/?>/g;
+    let m;
+    while ((m = re.exec(src)) !== null) {
+      const full = m[0];
+      if (/^<\/?[!?]/.test(full)) continue;
+      const name = m[1].toLowerCase();
+      const ln = this._lineOf(src, m.index);
+      const cl = this._colOf(src, m.index);
+      if (full.startsWith('</')) {
+        const open = stack.pop();
+        if (open && open.name !== name) problems.push({ line: ln, col: cl, severity: 'warning', message: `Closing '</${name}>' does not match '<${open.name}>'` });
+        else if (!open) problems.push({ line: ln, col: cl, severity: 'warning', message: `Unexpected closing tag '</${name}>'` });
+      } else if (!full.endsWith('/>')) {
+        if (!this._voidTags.has(name)) stack.push({ name, line: ln, col: cl });
+      }
+    }
+    stack.forEach(s => problems.push({ line: s.line, col: s.col, severity: 'warning', message: `Unclosed tag '<${s.name}>'` }));
   },
 
-  highlightHTML(code) {
-    code = code.replace(/(&lt;\/?)([\w-]+)/g, '$1<span class="hl-tag">$2</span>');
-    code = code.replace(/(\b[\w-]+)(=)(&quot;|&#39;|")/g, '<span class="hl-attr">$1</span>$2$3');
-    code = code.replace(/(&quot;[^&]*&quot;|&#39;[^&#]*&#39;)/g, '<span class="hl-string">$1</span>');
-    code = code.replace(/(&lt;!--[\s\S]*?--&gt;)/g, '<span class="hl-comment">$1</span>');
-    return code;
-  },
-
-  highlightC(code) {
-    code = code.replace(/('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")/g, '<span class="hl-string">$1</span>');
-    code = code.replace(/(\/\/.*$|\/\*[\s\S]*?\*\/)/gm, '<span class="hl-comment">$1</span>');
-    const keywords = /\b(alignas|alignof|and|asm|auto|bool|break|case|catch|char|class|const|constexpr|continue|default|delete|do|double|else|enum|explicit|extern|false|float|for|friend|goto|if|inline|int|long|mutable|namespace|new|noexcept|nullptr|operator|private|protected|public|register|reinterpret_cast|return|short|signed|sizeof|static|static_assert|struct|switch|template|this|throw|true|try|typedef|typeid|typename|union|unsigned|using|virtual|void|volatile|wchar_t|while)\b/g;
-    code = code.replace(keywords, '<span class="hl-keyword">$1</span>');
-    code = code.replace(/^(#[^\n]*)/gm, '<span class="hl-keyword">$1</span>');
-    code = code.replace(/\b(\d+\.?\d*)\b/g, '<span class="hl-number">$1</span>');
-    return code;
-  },
-
-  highlightSQL(code) {
-    const keywords = /\b(select|from|where|insert|into|values|update|set|delete|create|table|drop|alter|join|left|right|inner|outer|on|as|and|or|not|null|group|by|order|having|limit|offset|union|all|distinct|primary|key|foreign|references|index|view|procedure|function|begin|commit|rollback|cascade)\b/gi;
-    code = code.replace(/(--[^\n]*|\/\*[\s\S]*?\*\/)/g, '<span class="hl-comment">$1</span>');
-    code = code.replace(/('[^']*'|"[^"]*")/g, '<span class="hl-string">$1</span>');
-    code = code.replace(keywords, '<span class="hl-keyword">$1</span>');
-    code = code.replace(/\b(\d+\.?\d*)\b/g, '<span class="hl-number">$1</span>');
-    return code;
-  },
-
-  highlightCSS(code) {
-    code = code.replace(/(\/\*[\s\S]*?\*\/)/g, '<span class="hl-comment">$1</span>');
-    code = code.replace(/([\w-]+)(\s*:)/g, '<span class="hl-attr">$1</span>$2');
-    code = code.replace(/(#[0-9a-fA-F]{3,8})\b/g, '<span class="hl-number">$1</span>');
-    code = code.replace(/(\d+\.?\d*(px|em|rem|vh|vw|%|s|ms)?)\b/g, '<span class="hl-number">$1</span>');
-    code = code.replace(/(@[\w-]+)/g, '<span class="hl-keyword">$1</span>');
-    code = code.replace(/\.([\w-]+)/g, '<span class="hl-builtin">.$1</span>');
-    code = code.replace(/(['"][^'"]*['"])/g, '<span class="hl-string">$1</span>');
-    return code;
-  },
-
-  highlightPython(code) {
-    code = code.replace(/('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*"|'''[\s\S]*?'''|"""[\s\S]*?""")/g, '<span class="hl-string">$1</span>');
-    code = code.replace(/#.*$/gm, '<span class="hl-comment">$1</span>');
-    const keywords = /\b(and|as|assert|async|await|break|class|continue|def|del|elif|else|except|finally|for|from|global|if|import|in|is|lambda|nonlocal|not|or|pass|raise|return|try|while|with|yield|True|False|None)\b/g;
-    code = code.replace(keywords, '<span class="hl-keyword">$1</span>');
-    code = code.replace(/\b(\d+\.?\d*)\b/g, '<span class="hl-number">$1</span>');
-    return code;
-  },
-
-  highlightJSON(code) {
-    code = code.replace(/(\"(?:[^"\\]|\\.)*\")\s*:/g, '<span class="hl-attr">$1</span>:');
-    code = code.replace(/:\s*(\"(?:[^"\\]|\\.)*\")/g, ': <span class="hl-string">$1</span>');
-    code = code.replace(/:\s*(true|false|null)/g, ': <span class="hl-keyword">$1</span>');
-    code = code.replace(/:\s*(\d+\.?\d*)/g, ': <span class="hl-number">$1</span>');
-    return code;
-  },
-
-  highlightMarkdown(code) {
-    code = code.replace(/(#{1,6}\s.*)/g, '<span class="hl-keyword">$1</span>');
-    code = code.replace(/(\*\*.*?\*\*|__.*?__)/g, '<span class="hl-string">$1</span>');
-    code = code.replace(/(`[^`]+`)/g, '<span class="hl-builtin">$1</span>');
-    code = code.replace(/^(\s*[-*+]\s)/gm, '<span class="hl-number">$1</span>');
-    code = code.replace(/^(\s*\d+\.\s)/gm, '<span class="hl-number">$1</span>');
-    code = code.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<span class="hl-string">$1</span>(<span class="hl-number">$2</span>)');
-    return code;
+  _checkJS(code, problems) {
+    const re = /console\.(log|debug)\s*\(/g;
+    let m;
+    while ((m = re.exec(code)) !== null) {
+      problems.push({ line: this._lineOf(code, m.index), col: this._colOf(code, m.index), severity: 'info', message: `console.${m[1]}() left in code` });
+    }
+    const dbg = /\bdebugger\b/g;
+    while ((m = dbg.exec(code)) !== null) {
+      problems.push({ line: this._lineOf(code, m.index), col: this._colOf(code, m.index), severity: 'info', message: 'debugger statement left in code' });
+    }
   },
 };
 
@@ -330,6 +1061,7 @@ class TextEditor {
     this._bindEvents();
     this._syncScroll();
     this._updateLineNumbers();
+    this.ac = new AutocompleteBox();
   }
 
   _bindEvents() {
@@ -338,11 +1070,18 @@ class TextEditor {
       this._updateHighlight();
       this._updateLineNumbers();
       this._emit('change', this.content);
+      this._maybeAutocomplete();
     });
 
     this.textarea.addEventListener('scroll', () => this._syncScroll());
 
     this.textarea.addEventListener('keydown', (e) => {
+      if (this.ac && this.ac.isOpen()) {
+        if (e.key === 'ArrowDown') { e.preventDefault(); this.ac.next(); return; }
+        if (e.key === 'ArrowUp') { e.preventDefault(); this.ac.prev(); return; }
+        if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); this.ac.accept(); return; }
+        if (e.key === 'Escape') { this.ac.close(); return; }
+      }
       if (e.key === 'Tab') {
         e.preventDefault();
         const start = this.textarea.selectionStart;
@@ -385,6 +1124,7 @@ class TextEditor {
     });
     this.textarea.addEventListener('blur', () => {
       this.editorWrapper.classList.remove('focused');
+      if (this.ac) setTimeout(() => this.ac.close(), 200);
     });
 
     this.gutter.addEventListener('click', (e) => {
@@ -427,8 +1167,30 @@ class TextEditor {
     }
   }
 
+  _collectDocWords() {
+    const words = new Set();
+    const re = /[A-Za-z_$][\w$]*/g;
+    let m;
+    while ((m = re.exec(this.content))) words.add(m[0]);
+    return words;
+  }
+
+  _maybeAutocomplete() {
+    if (!this.ac) return;
+    const ta = this.textarea;
+    const pos = ta.selectionStart;
+    const before = ta.value.slice(0, pos);
+    const m = before.match(/[A-Za-z_$][\w$]*$/);
+    if (!m || m[0].length === 0) { this.ac.close(); return; }
+    const prefix = m[0];
+    const suggestions = Autocomplete.suggest(this.filename, prefix, this._collectDocWords());
+    if (!suggestions.length) { this.ac.close(); return; }
+    this.ac.show({ editor: this, prefix, suggestions });
+  }
+
   setValue(text) {
     text = text || '';
+    if (this.ac) this.ac.close();
     if (this.textarea.value !== text) {
       this.textarea.value = text;
       this.content = text;
@@ -464,23 +1226,6 @@ class TextEditor {
     const lastNewline = before.lastIndexOf('\n');
     const col = pos - lastNewline;
     return { line, col };
-  }
-
-  getSelection() {
-    const start = this.textarea.selectionStart;
-    const end = this.textarea.selectionEnd;
-    return this.textarea.value.substring(start, end);
-  }
-
-  replaceSelection(text) {
-    const start = this.textarea.selectionStart;
-    const end = this.textarea.selectionEnd;
-    this.textarea.value = this.textarea.value.substring(0, start) + text + this.textarea.value.substring(end);
-    this.textarea.selectionStart = this.textarea.selectionEnd = start + text.length;
-    this.content = this.textarea.value;
-    this._updateHighlight();
-    this._updateLineNumbers();
-    this._emit('change', this.content);
   }
 
   setCursor(line, col) {
@@ -565,7 +1310,6 @@ class FileTree {
     document.addEventListener('click', () => this.closeContextMenu());
   }
 
-  setTree(nodes) { this.nodes = nodes; this.render(); }
 
   buildFromFileList(files) {
     const root = [];
@@ -985,22 +1729,7 @@ const Storage = {
     localStorage.setItem(this._key('projects'), JSON.stringify(projects));
   },
 
-  deleteProject(projectId) {
-    const projects = this.listProjects().filter(p => p.id !== projectId);
-    localStorage.setItem(this._key('projects'), JSON.stringify(projects));
-    this._removePrefix(this._key(`files_${projectId}_`));
-  },
-
   _getFileKey(projectId, filePath) { return this._key(`files_${projectId}_${filePath}`); },
-
-  _removePrefix(prefix) {
-    const keys = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && key.startsWith(prefix)) keys.push(key);
-    }
-    keys.forEach(k => localStorage.removeItem(k));
-  },
 
   getProjectFilePaths(projectId) {
     const prefix = this._key(`files_${projectId}_`);
@@ -1033,15 +1762,8 @@ const Storage = {
   initDefaultProject() {
     let projects = this.listProjects();
     if (projects.length === 0) {
-      const defaultProject = { id: 'default', name: 'My Project', description: 'A sample project to get started', createdAt: new Date().toISOString(), fileCount: 0 };
+      const defaultProject = { id: 'default', name: 'My Project', description: 'Start with a clean workspace', createdAt: new Date().toISOString(), fileCount: 0 };
       this.saveProject(defaultProject);
-      const sampleFiles = {
-        'index.html': '<!DOCTYPE html>\n<html lang="en">\n<head>\n  <meta charset="UTF-8">\n  <meta name="viewport" content="width=device-width, initial-scale=1.0">\n  <title>My App</title>\n  <link rel="stylesheet" href="styles.css">\n</head>\n<body>\n  <h1>Hello, World!</h1>\n  <script src="app.js"></script>\n</body>\n</html>\n',
-        'styles.css': '/* Styles */\n* {\n  margin: 0;\n  padding: 0;\n  box-sizing: border-box;\n}\n\nbody {\n  font-family: -apple-system, BlinkMacSystemFont, sans-serif;\n  background: #1a1a1a;\n  color: #ffffff;\n}\n\nh1 {\n  color: #007acc;\n}\n',
-        'app.js': '// Main application\nconsole.log("Hello from PocketIDE!");\n\nfunction greet(name) {\n  return `Hello, ${name}!`;\n}\n\ndocument.addEventListener("DOMContentLoaded", () => {\n  const title = document.querySelector("h1");\n  if (title) {\n    title.textContent = greet("World");\n  }\n});\n',
-        'README.md': '# My Project\n\nWelcome to PocketIDE! This is a sample project.\n\n## Getting Started\n\nEdit files in the sidebar and see your changes live.\n\n## Features\n\n- Syntax highlighting\n- Multi-tab editing\n- Dark/Light themes\n- File management\n',
-      };
-      Object.entries(sampleFiles).forEach(([path, content]) => this.writeFile('default', path, content));
     }
     return projects.length > 0 ? projects[0] : this.listProjects()[0];
   },
@@ -1145,6 +1867,415 @@ class NativeFileSystem {
 }
 
 // ============================================================
+// Git Integration — fully offline via vendored isomorphic-git.
+//
+// GitFS maps the project's workspace files onto the SAME
+// localStorage the editor uses, so git and the file tree always
+// agree. The .git/ metadata lives in its own namespace.
+// ============================================================
+
+const GitFS = class GitFS {
+  constructor(projectId) {
+    this.projectId = projectId || 'default';
+    this.gitNs = 'pocketide_git_' + this.projectId + '_';
+    this.fileNs = 'pocketide_files_' + this.projectId + '_';
+  }
+
+  _rel(path) {
+    let p = (path || '').replace(/^\/+/, '').replace(/\/+/g, '/');
+    if (p === '.') return '';
+    return p;
+  }
+
+  _key(path) {
+    const p = this._rel(path);
+    if (p === '.git' || p.startsWith('.git/')) return this.gitNs + p;
+    return this.fileNs + p;
+  }
+
+  _isGitKey(key) { return key.startsWith(this.gitNs); }
+
+  _bytesToB64(bytes) {
+    let bin = '';
+    const chunk = 0x8000;
+    for (let i = 0; i < bytes.length; i += chunk) {
+      bin += String.fromCharCode.apply(null, bytes.subarray(i, i + chunk));
+    }
+    return btoa(bin);
+  }
+
+  _b64ToBytes(b64) {
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes;
+  }
+
+  async readFile(path, opts) {
+    const key = this._key(path);
+    const raw = localStorage.getItem(key);
+    if (raw === null) {
+      const err = new Error('ENOENT: no such file or directory, open ' + path);
+      err.code = 'ENOENT';
+      throw err;
+    }
+    let bytes;
+    if (this._isGitKey(key)) {
+      bytes = this._b64ToBytes(raw);
+    } else {
+      try { bytes = new TextEncoder().encode(JSON.parse(raw).content || ''); }
+      catch { bytes = new Uint8Array(0); }
+    }
+    if (opts && opts.encoding === 'utf8') return new TextDecoder().decode(bytes);
+    return bytes;
+  }
+
+  async writeFile(path, contents, opts) {
+    const key = this._key(path);
+    const bytes = typeof contents === 'string'
+      ? new TextEncoder().encode(contents)
+      : new Uint8Array(contents && contents.buffer ? contents : contents);
+    if (this._isGitKey(key)) {
+      localStorage.setItem(key, this._bytesToB64(bytes));
+    } else {
+      const data = { content: new TextDecoder().decode(bytes), path: this._rel(path), updatedAt: new Date().toISOString() };
+      localStorage.setItem(key, JSON.stringify(data));
+    }
+  }
+
+  async unlink(path) {
+    localStorage.removeItem(this._key(path));
+  }
+
+  async mkdir() { /* dirs are implicit */ }
+
+  async rmdir(path) {
+    const key = this._key(path);
+    const toRemove = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith(key + '/')) toRemove.push(k);
+    }
+    toRemove.forEach(k => localStorage.removeItem(k));
+  }
+
+  async stat(path) {
+    const key = this._key(path);
+    let st = null;
+    if (localStorage.getItem(key) !== null) {
+      st = { type: 'file', mode: 0o100644, size: this._sizeOf(key), ino: 0, mtimeMs: Date.now(), ctimeMs: Date.now(), uid: 0, gid: 0, dev: 0 };
+    } else if (this._hasChildren(key)) {
+      st = { type: 'dir', mode: 0o040000, size: 0, ino: 0, mtimeMs: Date.now(), ctimeMs: Date.now(), uid: 0, gid: 0, dev: 0 };
+    } else {
+      const err = new Error('ENOENT: no such file or directory, stat ' + path);
+      err.code = 'ENOENT';
+      throw err;
+    }
+    // isomorphic-git expects fs.stat results with these methods
+    st.isDirectory = () => st.type === 'dir';
+    st.isFile = () => st.type === 'file';
+    st.isSymbolicLink = () => false;
+    return st;
+  }
+
+  async lstat(path) { return this.stat(path); }
+
+  async readdir(path) {
+    const key = this._key(path);
+    const prefix = key === '' ? '' : key + '/';
+    const names = new Set();
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k) continue;
+      if (!k.startsWith(this.fileNs) && !k.startsWith(this.gitNs)) continue;
+      let rel = k.substring(k.startsWith(this.gitNs) ? this.gitNs.length : this.fileNs.length);
+      if (rel === '') continue;
+      if (path === '/' || path === '' || key === '') {
+        // top level: first path segment (plus '.git' if git metadata exists)
+        const seg = rel.split('/')[0];
+        if (seg) names.add(seg);
+        if (k.startsWith(this.gitNs)) names.add('.git');
+      } else if (rel.startsWith(prefix)) {
+        const rest = rel.substring(prefix.length);
+        const seg = rest.split('/')[0];
+        if (seg) names.add(seg);
+      } else if (rel.startsWith(key + '/')) {
+        const rest = rel.substring(key.length + 1);
+        const seg = rest.split('/')[0];
+        if (seg) names.add(seg);
+      }
+    }
+    // a directory must exist even if empty
+    if (names.size === 0 && key !== '' && key !== '.git' && !this._hasChildren(key)) {
+      const err = new Error('ENOENT: no such file or directory, scandir ' + path);
+      err.code = 'ENOENT';
+      throw err;
+    }
+    return Array.from(names).sort();
+  }
+
+  _hasChildren(key) {
+    // storage keys are '<ns><path>' where the namespace already ends with '_';
+    // a dir has children when some key is strictly longer and starts with it
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.length > key.length && k.startsWith(key)) return true;
+    }
+    return false;
+  }
+
+  _sizeOf(key) {
+    const raw = localStorage.getItem(key);
+    if (!raw) return 0;
+    if (this._isGitKey(key)) return this._b64ToBytes(raw).length;
+    try { return new TextEncoder().encode(JSON.parse(raw).content || '').length; }
+    catch { return raw.length; }
+  }
+
+  readlink() { const e = new Error('ENOSYS'); e.code = 'ENOSYS'; throw e; }
+  symlink() { const e = new Error('ENOSYS'); e.code = 'ENOSYS'; throw e; }
+};
+
+class GitIntegration {
+  constructor(projectId) {
+    this.projectId = projectId || 'default';
+    this.dir = '/';
+    this.rawFs = new GitFS(this.projectId);
+    this.fs = { promises: this.rawFs };
+    this.initialized = false;
+    this.author = { name: 'PocketIDE User', email: 'user@pocketide.local' };
+  }
+
+  async isRepo() {
+    try { await this.rawFs.stat('/.git'); return true; }
+    catch { return false; }
+  }
+
+  async initRepo() {
+    await window.git.init({ fs: this.fs, dir: this.dir, defaultBranch: 'main' });
+    this.initialized = true;
+  }
+
+  async getStatus() {
+    if (!this.initialized) return [];
+    try {
+      const matrix = await window.git.statusMatrix({ fs: this.fs, dir: this.dir });
+      return this.parseStatusMatrix(matrix);
+    } catch (e) { console.warn('git status failed:', e); return []; }
+  }
+
+  parseStatusMatrix(matrix) {
+    const items = [];
+    for (const row of matrix) {
+      const filepath = row[0];
+      if (filepath.startsWith('.git/')) continue;
+      const head = row[1], workdir = row[2], stage = row[3];
+      let status = null;
+      if (head === 0 && workdir === 2 && stage === 0) status = '??';      // untracked
+      else if (head === 0 && (stage === 2 || workdir === 2)) status = 'A'; // added/staged new
+      else if (workdir === 3 || (head !== 0 && workdir === 0 && stage === 0)) status = 'D';
+      else if (head !== 0 && workdir !== head) status = 'M';
+      else if (stage === 1 && workdir === 0) status = 'M';                // staged modification
+      if (status) items.push({ path: filepath, status });
+    }
+    return items;
+  }
+
+  async stageAll() {
+    const matrix = await window.git.statusMatrix({ fs: this.fs, dir: this.dir });
+    for (const row of matrix) {
+      const filepath = row[0];
+      if (filepath.startsWith('.git/')) continue;
+      try { await window.git.add({ fs: this.fs, dir: this.dir, filepath }); }
+      catch (e) { console.warn('git add failed:', filepath, e); }
+    }
+  }
+
+  async commit(message) {
+    return await window.git.commit({ fs: this.fs, dir: this.dir, message, author: this.author });
+  }
+
+  async getLog(depth = 8) {
+    if (!this.initialized) return [];
+    try {
+      const commits = await window.git.log({ fs: this.fs, dir: this.dir, depth });
+      return commits.map(c => ({
+        oid: c.oid,
+        message: String(c.commit.message).split('\n')[0],
+        date: c.commit.committer.timestamp * 1000,
+      }));
+    } catch { return []; }
+  }
+
+  async currentBranch() {
+    try { return await window.git.currentBranch({ fs: this.fs, dir: this.dir, fullname: false }); }
+    catch { return null; }
+  }
+}
+
+// ============================================================
+// GitPanel — sidebar UI (branch, changes, commit, history)
+// ============================================================
+
+class GitPanel {
+  constructor(app) {
+    this.app = app;
+    this.git = null;
+    this.busy = false;
+    this.branch = 'main';
+  }
+
+  init() {
+    const ids = ['git-init-btn', 'git-commit-btn', 'git-stage-all', 'git-commit-message', 'git-branch-name', 'git-changes', 'git-log'];
+    this.el = {};
+    ids.forEach(id => { this.el[id] = document.getElementById(id); });
+    const on = (id, fn) => { const el = this.el[id]; if (el) el.addEventListener('click', fn); };
+    on('git-init-btn', () => this.initRepo());
+    on('git-stage-all', () => this.stageAll());
+    on('git-commit-btn', () => this.commit());
+    const msg = this.el['git-commit-message'];
+    if (msg) {
+      msg.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') this.commit();
+      });
+    }
+    // Auto-init a repo when the local project has files — git should just work.
+    this.ensureGit().then(async (git) => {
+      if (!git.initialized && this.app.fileList.length > 0 && !this.app.isNativeMode()) {
+        try { await git.initRepo(); this.app.gitInitialized = true; } catch (e) { /* stored in git.errors */ }
+      }
+      this.refresh();
+    });
+  }
+
+  async ensureGit() {
+    const projectId = this.app.currentProjectId;
+    if (!this.git) {
+      this.git = new GitIntegration(projectId);
+      this.git.initialized = await this.git.isRepo();
+    }
+    return this.git;
+  }
+
+  async initRepo() {
+    if (this.busy) return;
+    this.busy = true;
+    try {
+      const git = await this.ensureGit();
+      await git.initRepo();
+      this.app.gitInitialized = true;
+      await this.refresh();
+    } catch (e) { console.warn('git init failed:', e); }
+    this.busy = false;
+  }
+
+  async stageAll() {
+    if (this.busy) return;
+    this.busy = true;
+    try {
+      const git = await this.ensureGit();
+      await git.stageAll();
+      await this.refresh();
+    } catch (e) { console.warn('git stage failed:', e); }
+    this.busy = false;
+  }
+
+  async commit() {
+    if (this.busy) return;
+    const msg = this.el['git-commit-message'];
+    const message = msg ? msg.value.trim() : '';
+    if (!message) { if (msg) msg.focus(); return; }
+    this.busy = true;
+    try {
+      const git = await this.ensureGit();
+      if (!git.initialized) await git.initRepo();
+      await git.stageAll();
+      await git.commit(message);
+      if (msg) msg.value = '';
+      await this.refresh();
+    } catch (e) { console.warn('git commit failed:', e); }
+    this.busy = false;
+  }
+
+  async refresh() {
+    if (this.busy) return;
+    try {
+      const git = await this.ensureGit();
+      // Auto-init once the local project has files — git should just work.
+      if (!git.initialized && this.app.fileList.length > 0 && !this.app.isNativeMode()) {
+        try { await git.initRepo(); this.app.gitInitialized = true; } catch (e) { /* keep Init Repo button */ }
+      }
+      this.branch = (await git.currentBranch()) || 'main';
+      const branchEl = this.el['git-branch-name'];
+      if (branchEl) branchEl.textContent = git.initialized ? this.branch : 'no repo yet';
+      const statusBranch = document.getElementById('status-branch');
+      if (statusBranch) statusBranch.textContent = git.initialized ? this.branch : 'local';
+      const initBtn = this.el['git-init-btn'];
+      if (initBtn) initBtn.style.display = git.initialized ? 'none' : 'inline-block';
+      if (!git.initialized) {
+        this.renderChanges([]);
+        this.renderLog([]);
+        return;
+      }
+      const changes = await git.getStatus();
+      const log = await git.getLog(8);
+      this.renderChanges(changes);
+      this.renderLog(log);
+    } catch (e) { console.warn('git refresh failed:', e); }
+  }
+
+  renderChanges(changes) {
+    const box = this.el['git-changes'];
+    if (!box) return;
+    if (!changes.length) {
+      box.innerHTML = '<div class="git-empty">No changes — everything committed</div>';
+      return;
+    }
+    const map = { 'A': 'A+', 'M': 'M~', 'D': 'D-', '??': '??' };
+    const cls = { 'A': 'st-added', 'M': 'st-modified', 'D': 'st-deleted', '??': 'st-untracked' };
+    box.innerHTML = '';
+    changes.forEach(c => {
+      const row = document.createElement('div');
+      row.className = 'git-change';
+      const st = document.createElement('span');
+      st.className = 'gc-status ' + (cls[c.status] || '');
+      st.textContent = map[c.status] || c.status;
+      const p = document.createElement('span');
+      p.className = 'gc-path';
+      p.textContent = c.path;
+      row.appendChild(st);
+      row.appendChild(p);
+      box.appendChild(row);
+    });
+  }
+
+  renderLog(log) {
+    const box = this.el['git-log'];
+    if (!box) return;
+    if (!log.length) {
+      box.innerHTML = '<div class="git-empty">No commits yet</div>';
+      return;
+    }
+    box.innerHTML = '';
+    log.forEach(c => {
+      const row = document.createElement('div');
+      row.className = 'git-commit';
+      const msg = document.createElement('span');
+      msg.className = 'gc-msg';
+      msg.textContent = c.message;
+      const meta = document.createElement('span');
+      meta.className = 'gc-meta';
+      const d = new Date(c.date);
+      const stamp = isNaN(d.getTime()) ? '' : d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) + ' ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+      meta.textContent = (stamp ? stamp + ' · ' : '') + c.oid.slice(0, 7);
+      row.appendChild(msg);
+      row.appendChild(meta);
+      box.appendChild(row);
+    });
+  }
+}
+
+// ============================================================
 // PocketIDE - Main Application
 // ============================================================
 
@@ -1162,6 +2293,11 @@ class PocketIDE {
     this.fileSystem = null;
     /** Clipboard for copy/cut/paste: { action: 'copy'|'cut', paths: string[] } */
     this._fileClipboard = null;
+    /** Git panel + problem-detection state */
+    this.gitPanel = null;
+    this.gitInitialized = false;
+    this.problems = [];
+    this._problemsTimer = null;
     this.init();
   }
 
@@ -1177,6 +2313,8 @@ class PocketIDE {
     this.setupKeyboardShortcuts();
     this.setupSidebarResize();
     this.setupUIControls();
+    this.initGit();
+    this.initProblemsUI();
 
     this.loadProjectFiles(this.currentProjectId);
 
@@ -1297,6 +2435,7 @@ class PocketIDE {
       this.fileContents.set(tab.path, currentContent);
       const saved = this.savedContents.get(tab.path) || '';
       this.tabManager.setTabDirty(tab.path, currentContent !== saved);
+      this._scheduleProblemCheck();
     });
     const updateCursorPos = () => this.updateStatusBarPosition();
     this.editor.textarea.addEventListener('click', updateCursorPos);
@@ -1484,6 +2623,7 @@ class PocketIDE {
     } else {
       Storage.writeFile(this.currentProjectId, path, savedContent);
     }
+    if (this.gitPanel) this.gitPanel.refresh();
     console.log(`Saved: ${path}`);
   }
 
@@ -1544,6 +2684,99 @@ class PocketIDE {
     if (sidebar) sidebar.classList.remove('open');
     if (overlay) overlay.classList.remove('visible');
     document.body.style.overflow = '';
+  }
+
+  // --- Git ---
+  initGit() {
+    if (typeof window.git === 'undefined') return;
+    this.gitPanel = new GitPanel(this);
+    this.gitPanel.init();
+  }
+
+  // --- Problems ---
+  initProblemsUI() {
+    const badge = document.getElementById('status-problems');
+    if (badge) badge.addEventListener('click', () => this.switchSidebarView('problems'));
+    const mabProblems = document.getElementById('btn-mab-problems');
+    if (mabProblems) mabProblems.addEventListener('click', () => this.switchSidebarView('problems'));
+  }
+
+  _scheduleProblemCheck() {
+    clearTimeout(this._problemsTimer);
+    this._problemsTimer = setTimeout(() => this._runProblemCheck(), 350);
+  }
+
+  _runProblemCheck() {
+    const tab = this.tabManager.getActiveTab();
+    if (!tab) { this.problems = []; this._renderProblems(); return; }
+    this.problems = Problems.check(this.editor.getValue(), tab.path);
+    this._renderProblems();
+  }
+
+  _renderProblems() {
+    const count = this.problems.length;
+    const badge = document.getElementById('status-problems');
+    if (badge) {
+      badge.style.display = count ? 'inline-flex' : 'none';
+      const cnt = badge.querySelector('.sb-count');
+      if (cnt) cnt.textContent = count;
+      const dot = badge.querySelector('.sb-dot');
+      if (dot) {
+        dot.className = 'sb-dot ' + (this.problems.some(p => p.severity === 'error') ? 'err' : this.problems.some(p => p.severity === 'warning') ? 'warn' : 'info');
+      }
+    }
+    const tabBadge = document.getElementById('sidebar-problems-count');
+    if (tabBadge) {
+      tabBadge.textContent = count;
+      tabBadge.hidden = count === 0;
+    }
+    const list = document.getElementById('problems-list');
+    if (!list) return;
+    if (count === 0) {
+      list.innerHTML = '<div class="problems-empty"><svg class="icon-svg"><use href="#i-check"/></svg> No problems found</div>';
+      return;
+    }
+    list.innerHTML = '';
+    this.problems.forEach(p => {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'problem-item ' + p.severity;
+      const sev = document.createElement('span');
+      sev.className = 'problem-sev';
+      const loc = document.createElement('span');
+      loc.className = 'problem-loc';
+      loc.textContent = `${p.line}:${p.col}`;
+      const msg = document.createElement('span');
+      msg.className = 'problem-msg';
+      msg.textContent = p.message;
+      item.appendChild(sev);
+      item.appendChild(loc);
+      item.appendChild(msg);
+      item.addEventListener('click', () => {
+        if (this.editor) this.editor.setCursor(p.line, Math.max(1, p.col));
+        this.closeMobileSidebar();
+        if (this.editor) this.editor.focus();
+      });
+      list.appendChild(item);
+    });
+  }
+
+  // --- Sidebar views (Files / Git / Problems) ---
+  switchSidebarView(view) {
+    const tabs = document.querySelectorAll('.sidebar-tab');
+    const views = document.querySelectorAll('.sidebar-view');
+    tabs.forEach(t => t.classList.toggle('active', t.dataset.view === view));
+    views.forEach(v => v.classList.toggle('active', v.id === 'sidebar-view-' + view));
+    if (window.innerWidth <= 768) {
+      this.sidebarVisible = true;
+      const sidebar = document.getElementById('sidebar');
+      const overlay = document.getElementById('sidebar-overlay');
+      if (sidebar) sidebar.classList.add('open');
+      if (overlay) overlay.classList.add('visible');
+      document.body.style.overflow = 'hidden';
+    }
+    if (view === 'git' && this.gitPanel) this.gitPanel.refresh();
+    if (view === 'problems') this._renderProblems();
   }
 
   _showBottomSheet() {
@@ -1970,6 +3203,7 @@ class PocketIDE {
     Promise.all(tasks).then(() => {
       this._loadNativeFiles();
       this.loadProjectFiles(this.currentProjectId);
+      if (this.gitPanel) this.gitPanel.refresh();
       if (quotaError) alert('Storage is full — some files could not be saved. Delete old files to free up space.');
       else if (imported > 0) console.log(`Imported ${imported} of ${imported + skipped} file(s)`);
     });
@@ -2158,7 +3392,7 @@ class PocketIDE {
 
       switch (action) {
         case 'new-file':
-          this.fileTree.showInputModal('New File', 'Enter file name:', '', (name) => {
+          this.fileTree.showInputModal('New File', 'e.g. main.py, index.cpp', '', (name) => {
             if (this.isNativeMode()) {
               this.fileSystem.writeFile(name, '').then(() => this._loadNativeFiles());
               this.openFile(name, '');
@@ -2167,7 +3401,7 @@ class PocketIDE {
               this.loadProjectFiles(this.currentProjectId);
               this.openFile(name, '');
             }
-          });
+          }, { chips: true });
           break;
         case 'new-folder':
           this.fileTree.showInputModal('New Folder', 'Enter folder name:', '', (name) => {
@@ -2219,6 +3453,46 @@ class PocketIDE {
     // Sidebar overlay click to close (mobile)
     const sidebarOverlay = document.getElementById('sidebar-overlay');
     if (sidebarOverlay) sidebarOverlay.addEventListener('click', () => this.closeMobileSidebar());
+
+    // Sidebar view tabs (Files / Git / Problems)
+    const sidebarTabBar = document.getElementById('sidebar-tab-bar');
+    if (sidebarTabBar) {
+      sidebarTabBar.addEventListener('click', (e) => {
+        const tab = e.target.closest('.sidebar-tab');
+        if (tab) this.switchSidebarView(tab.dataset.view);
+      });
+    }
+
+    // Mobile quick-action bar (touch buttons for the Ctrl+ shortcuts)
+    const mabNew = document.getElementById('btn-mab-new');
+    if (mabNew) {
+      mabNew.addEventListener('click', () => {
+        this.fileTree.showInputModal('New File', 'e.g. main.py, index.cpp', '', (name) => {
+          if (this.isNativeMode()) {
+            this.fileSystem.writeFile(name, '').then(() => this._loadNativeFiles());
+            this.openFile(name, '');
+          } else {
+            Storage.writeFile(this.currentProjectId, name, '');
+            this.loadProjectFiles(this.currentProjectId);
+            this.openFile(name, '');
+          }
+        }, { chips: true });
+      });
+    }
+    const mabSave = document.getElementById('btn-mab-save');
+    if (mabSave) {
+      mabSave.addEventListener('click', () => {
+        const tab = this.tabManager.getActiveTab();
+        if (tab) this.saveFile(tab.path, this.editor.getValue());
+      });
+    }
+    const mabClose = document.getElementById('btn-mab-close');
+    if (mabClose) {
+      mabClose.addEventListener('click', () => {
+        const tab = this.tabManager.getActiveTab();
+        if (tab) this.tabManager.closeTab(tab.id);
+      });
+    }
 
     // Unsaved changes warning on beforeunload
     window.addEventListener('beforeunload', (e) => {

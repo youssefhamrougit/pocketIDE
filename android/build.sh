@@ -78,7 +78,9 @@ rm -rf "$WORK"
 mkdir -p "$WORK/assets"
 
 log "Copying app files into APK assets..."
+mkdir -p "$WORK/assets/vendor"
 cp "$REPO_DIR/index.html" "$REPO_DIR/app.js" "$REPO_DIR/styles.css" "$WORK/assets/"
+cp "$REPO_DIR/vendor/"*.js "$WORK/assets/vendor/"
 
 log "Assembling resources..."
 cp -r "$PROJECT_DIR/res/." "$WORK/res/"

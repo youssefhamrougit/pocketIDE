@@ -38,7 +38,75 @@ It's intentionally simple:
 
 ### Supported languages
 
+<<<<<<< HEAD
 JavaScript, TypeScript, JSX/TSX, Python, HTML, CSS/SCSS, JSON, Markdown, C, C++, C#, Go, Rust, Java, Ruby, PHP, Swift, Kotlin, Dart, Shell, YAML, TOML, XML, SVG, SQL, Lua, Vue, and more — unknown extensions open as plain text, so **any** file type works.
+=======
+| Layer | Technology |
+|-------|-----------|
+| **Frontend (Standalone)** | Vanilla HTML + CSS + JavaScript |
+| **Frontend (Server)** | CodeMirror 6 (via esbuild) + Vanilla JS |
+| **Backend** | Node.js + Express 5 (REST API) |
+| **Auth** | bcryptjs + JWT |
+| **Storage (Standalone)** | localStorage |
+| **Storage (Server)** | Filesystem-based JSON store |
+| **Build** | None (standalone) / esbuild (editor) |
+
+### Languages Used
+
+- **JavaScript** (ES2022) — 100% of application code
+- **HTML** — UI markup
+- **CSS** — Styling
+
+## 🏗️ Project Structure
+
+```
+pocketide/
+├── index.html              # Standalone edition entry point
+├── app.js                  # Standalone edition core logic
+├── styles.css              # Standalone edition styles
+│
+├── editor/                 # CodeMirror 6 edition
+│   ├── src/
+│   │   ├── editor.js       # Editor initialization & lifecycle
+│   │   ├── file-tree.js    # File explorer component
+│   │   ├── tabs.js         # Tab management
+│   │   ├── themes.js       # Theme system
+│   │   ├── languages.js    # Language definitions
+│   │   ├── bridge.js       # WebView bridge (for mobile embedding)
+│   │   ├── api-client.js   # Backend API client
+│   │   ├── plugin-api.js   # Plugin system API
+│   │   └── index.html      # Editor page
+│   └── build.mjs           # esbuild configuration
+│
+├── backend/                # Node.js backend
+│   ├── src/
+│   │   ├── server.js       # Express server entry
+│   │   ├── config.js       # Configuration
+│   │   ├── routes/         # API routes
+│   │   ├── middleware/     # Auth & error middleware
+│   │   ├── services/       # Business logic
+│   │   └── storage/        # File-based JSON store
+│   └── package.json
+│
+├── plugins/                # Community plugins directory
+└── docs/                   # Documentation
+```
+
+## 🚧 Project Status
+
+⚠️ **Active development**
+
+### Current Status
+
+- ✅ **Standalone edition** — Fully functional (file explorer, editor, tabs, themes)
+- ✅ **Server backend** — Authentication, project CRUD, file operations
+- ✅ **CodeMirror 6 editor** — Syntax highlighting for multiple languages
+- ✅ **Plugin API** — Extensible plugin system
+- ✅ **Git integration**
+- ⬜ **Integrated terminal**
+- ⬜ **AI assistant**
+- ⬜ **Cloud workspaces**
+>>>>>>> 15e4e84b432ad9c9cf26176802aba8cd2fee4f2a
 
 ## 🚀 Quick Start
 

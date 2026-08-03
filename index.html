@@ -45,11 +45,27 @@
     <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="12" y1="16" x2="12" y2="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="12" y1="8" x2="12.01" y2="8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
     <symbol id="i-file" viewBox="0 0 24 24"><path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="13 2 13 9 20 9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-chevron-right" viewBox="0 0 24 24"><polyline points="9 18 15 12 9 6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-git-branch" viewBox="0 0 24 24"><line x1="6" y1="3" x2="6" y2="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="18" cy="6" r="3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="6" cy="18" r="3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><path d="M18 9a9 9 0 0 1-9 9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><line x1="12" y1="9" x2="12" y2="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="12" y1="17" x2="12.01" y2="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-save" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="17 21 17 13 7 13 7 21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="7 3 7 8 15 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
   </svg>
 
   <div id="app">
     <!-- Sidebar -->
     <div id="sidebar">
+      <div id="sidebar-tab-bar">
+        <button class="sidebar-tab active" data-view="explorer" title="Files">
+          <svg class="icon-svg"><use href="#i-folder-open"/></svg><span>Files</span>
+        </button>
+        <button class="sidebar-tab" data-view="git" title="Git">
+          <svg class="icon-svg"><use href="#i-git-branch"/></svg><span>Git</span>
+        </button>
+        <button class="sidebar-tab" data-view="problems" title="Problems">
+          <svg class="icon-svg"><use href="#i-alert"/></svg><span>Problems</span>
+          <span class="sidebar-tab-badge" id="sidebar-problems-count" hidden>0</span>
+        </button>
+      </div>
       <div id="sidebar-view-explorer" class="sidebar-view active">
         <div id="sidebar-header">
           <div id="sidebar-title">
@@ -75,6 +91,36 @@
           </div>
         </div>
         <div id="file-tree"></div>
+      </div>
+
+      <!-- Git view -->
+      <div id="sidebar-view-git" class="sidebar-view">
+        <div id="git-header">
+          <div id="git-repo-info">
+            <span class="git-branch-icon"><svg class="icon-svg"><use href="#i-git-branch"/></svg></span>
+            <span id="git-branch-name">—</span>
+          </div>
+          <button class="git-action-btn" id="git-init-btn">Init Repo</button>
+        </div>
+        <div id="git-body">
+          <div class="git-section-head">
+            <span>Changes</span>
+            <button class="git-action-btn git-action-btn-sm" id="git-stage-all">Stage all</button>
+          </div>
+          <div id="git-changes"><div class="git-empty">No changes yet</div></div>
+          <div id="git-commit-box">
+            <input id="git-commit-message" type="text" placeholder="Commit message" autocomplete="off" autocapitalize="off" spellcheck="false" />
+            <button class="git-action-btn" id="git-commit-btn">Commit</button>
+          </div>
+          <div class="git-section-head"><span>History</span></div>
+          <div id="git-log"><div class="git-empty">No commits yet</div></div>
+        </div>
+      </div>
+
+      <!-- Problems view -->
+      <div id="sidebar-view-problems" class="sidebar-view">
+        <div id="problems-head">Problems</div>
+        <div id="problems-list"><div class="problems-empty"><svg class="icon-svg"><use href="#i-check"/></svg> No problems found</div></div>
       </div>
     </div>
 
@@ -153,6 +199,22 @@
         <div id="editor-wrapper" style="display:none;"></div>
       </div>
 
+      <!-- Mobile quick actions (touch buttons for the Ctrl+ shortcuts) -->
+      <div id="mobile-action-bar">
+        <button class="mab-btn" id="btn-mab-new" aria-label="New File" title="New File">
+          <svg class="icon-svg"><use href="#i-file-plus"/></svg><span>New File</span>
+        </button>
+        <button class="mab-btn" id="btn-mab-save" aria-label="Save" title="Save">
+          <svg class="icon-svg"><use href="#i-save"/></svg><span>Save</span>
+        </button>
+        <button class="mab-btn" id="btn-mab-close" aria-label="Close Tab" title="Close Tab">
+          <svg class="icon-svg"><use href="#i-x"/></svg><span>Close Tab</span>
+        </button>
+        <button class="mab-btn" id="btn-mab-problems" aria-label="Problems" title="Problems">
+          <svg class="icon-svg"><use href="#i-alert"/></svg><span>Problems</span>
+        </button>
+      </div>
+
       <!-- Status Bar -->
       <div id="status-bar">
         <div id="status-left">
@@ -163,6 +225,10 @@
           <span id="status-indentation">Spaces: 2</span>
         </div>
         <div id="status-right">
+          <button id="status-problems" title="Problems" aria-label="Problems" style="display:none;">
+            <span class="sb-dot"></span>
+            <span class="sb-count">0</span>
+          </button>
           <span id="status-language">Plain Text</span>
           <span class="status-separator">|</span>
           <span id="status-position">Ln 1, Col 1</span>
@@ -264,6 +330,8 @@
   <input type="file" id="import-input" multiple style="display:none;" />
   <input type="file" id="import-folder-input" multiple webkitdirectory style="display:none;" />
 
+  <script src="vendor/buffer-polyfill.js"></script>
+  <script src="vendor/isomorphic-git.min.js"></script>
   <script src="app.js"></script>
 </body>
 </html>
