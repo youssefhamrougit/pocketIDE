@@ -26,8 +26,8 @@ build/
 /local.properties
 *.apk
 *.aab
-# ...but keep the committed release APK (build.sh refreshes it into apk/)
-!apk/PocketIDE.apk
+# ...but keep the committed release APK at the project root (build.sh refreshes it)
+!/PocketIDE.apk
 
 # iOS
 ios/Pods/

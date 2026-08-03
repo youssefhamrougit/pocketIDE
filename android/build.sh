@@ -151,8 +151,7 @@ cp "$WORK/web/icon-512.png" "$OUT_DIR/icon-512.png"
 cp "$REPO_DIR/README.md" "$OUT_DIR/README.md"
 
 # Keep the repo's committed copy in sync
-mkdir -p "$REPO_DIR/apk"
-cp "$OUT_DIR/PocketIDE.apk" "$REPO_DIR/apk/PocketIDE.apk"
+cp "$OUT_DIR/PocketIDE.apk" "$REPO_DIR/PocketIDE.apk"
 
 SIZE=$(du -h "$OUT_DIR/PocketIDE.apk" | cut -f1)
 log "Done! $OUT_DIR/PocketIDE.apk ($SIZE)"
