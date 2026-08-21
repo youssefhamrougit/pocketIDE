@@ -1094,6 +1094,10 @@ class TextEditor {
         if (e.key === 'Enter' || e.key === 'Tab') { e.preventDefault(); this.ac.accept(); return; }
         if (e.key === 'Escape') { this.ac.close(); return; }
       }
+      // If Find & Replace is open, Escape should close it (handled in document keydown)
+      if (e.key === 'Escape' && window.__POCKETIDE && window.__POCKETIDE.findReplace && window.__POCKETIDE.findReplace.isOpen) {
+        return; // Let it bubble to document handler
+      }
       if (e.key === 'Tab') {
         e.preventDefault();
         const start = this.textarea.selectionStart;
@@ -1676,6 +1680,7 @@ class TabManager {
   setTabDirty(path, dirty) {
     const tab = this.tabs.find(t => t.path === path);
     if (tab) { tab.dirty = dirty; this.render(); }
+    if (this.callbacks.onDirtyChange) this.callbacks.onDirtyChange();
   }
 
   getActiveTab() { return this.tabs.find(t => t.active) || null; }
@@ -2129,6 +2134,109 @@ class GitIntegration {
     try { return await window.git.currentBranch({ fs: this.fs, dir: this.dir, fullname: false }); }
     catch { return null; }
   }
+
+  async addRemote(name, url) {
+    try {
+      await window.git.addRemote({ fs: this.fs, dir: this.dir, remote: name, url });
+    } catch (e) {
+      // If remote already exists, update it
+      if (e.message && e.message.includes('already exists')) {
+        await window.git.deleteRemote({ fs: this.fs, dir: this.dir, remote: name }).catch(() => {});
+        await window.git.addRemote({ fs: this.fs, dir: this.dir, remote: name, url });
+      } else throw e;
+    }
+  }
+
+  async removeRemote(name) {
+    try { await window.git.deleteRemote({ fs: this.fs, dir: this.dir, remote: name }); }
+    catch { /* ignore */ }
+  }
+
+  async listRemotes() {
+    try {
+      const remotes = await window.git.listRemotes({ fs: this.fs, dir: this.dir });
+      return remotes;
+    } catch { return []; }
+  }
+
+  async fetchRemote(remoteName, { onProgress } = {}) {
+    const http = this._createHttpClient();
+    await window.git.fetch({
+      fs: this.fs,
+      http,
+      dir: this.dir,
+      remote: remoteName || 'origin',
+      onProgress,
+    });
+  }
+
+  async pull({ onProgress } = {}) {
+    const http = this._createHttpClient();
+    await window.git.pull({
+      fs: this.fs,
+      http,
+      dir: this.dir,
+      onProgress,
+    });
+  }
+
+  async push({ onProgress } = {}) {
+    const http = this._createHttpClient();
+    await window.git.push({
+      fs: this.fs,
+      http,
+      dir: this.dir,
+      onProgress,
+    });
+  }
+
+  async clone(url, { onProgress, remoteName } = {}) {
+    // Clear existing workspace first (except .git)
+    await this.rawFs.rmdir('/');
+    const http = this._createHttpClient();
+    await window.git.clone({
+      fs: this.fs,
+      http,
+      dir: this.dir,
+      url,
+      remote: remoteName || 'origin',
+      onProgress,
+    });
+    this.initialized = true;
+  }
+
+  _createHttpClient() {
+    // isomorphic-git's http client for browser fetch
+    const tokenKey = 'pocketide_git_token_' + this.projectId;
+    const token = localStorage.getItem(tokenKey) || '';
+    return {
+      async request({ url: reqUrl, method = 'GET', headers = {}, body, onProgress }) {
+        const authHeaders = { ...headers };
+        if (token) {
+          // GitHub API uses token auth
+          authHeaders['Authorization'] = 'token ' + token;
+        }
+        const resp = await fetch(reqUrl, {
+          method,
+          headers: authHeaders,
+          body,
+          signal: AbortSignal.timeout(60000),
+        });
+        if (!resp.ok) {
+          const text = await resp.text().catch(() => '');
+          throw new Error(`HTTP ${resp.status}: ${text || resp.statusText}`);
+        }
+        const contentType = resp.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+          return { status: resp.status, headers: Object.fromEntries(resp.headers), body: await resp.json() };
+        }
+        return { status: resp.status, headers: Object.fromEntries(resp.headers), body: resp.body };
+      },
+      async response({ url: reqUrl, method, headers = {}, body, onProgress }) {
+        return this.request({ url: reqUrl, method, headers, body, onProgress });
+      },
+    };
+  }
 }
 
 // ============================================================
@@ -2144,13 +2252,19 @@ class GitPanel {
   }
 
   init() {
-    const ids = ['git-init-btn', 'git-commit-btn', 'git-stage-all', 'git-commit-message', 'git-branch-name', 'git-changes', 'git-log'];
+    const ids = ['git-init-btn', 'git-commit-btn', 'git-stage-all', 'git-commit-message', 'git-branch-name', 'git-changes', 'git-log', 'git-toggle-remote', 'git-remote-url', 'git-remote-token', 'git-clone-btn', 'git-set-remote-btn', 'git-push-btn', 'git-pull-btn', 'git-fetch-btn', 'git-remote-status'];
     this.el = {};
     ids.forEach(id => { this.el[id] = document.getElementById(id); });
     const on = (id, fn) => { const el = this.el[id]; if (el) el.addEventListener('click', fn); };
     on('git-init-btn', () => this.initRepo());
     on('git-stage-all', () => this.stageAll());
     on('git-commit-btn', () => this.commit());
+    on('git-clone-btn', () => this.clone());
+    on('git-set-remote-btn', () => this.setRemote());
+    on('git-push-btn', () => this.push());
+    on('git-pull-btn', () => this.pull());
+    on('git-fetch-btn', () => this.fetch());
+    on('git-toggle-remote', () => this._toggleRemotePanel());
     const msg = this.el['git-commit-message'];
     if (msg) {
       msg.addEventListener('keydown', (e) => {
@@ -2211,6 +2325,153 @@ class GitPanel {
       await git.commit(message);
       if (msg) msg.value = '';
     } catch (e) { console.warn('git commit failed:', e); }
+    this.busy = false;
+    await this.refresh();
+  }
+
+  // --- Remote operations ---
+
+  _setRemoteStatus(text, type) {
+    const el = this.el['git-remote-status'];
+    if (!el) return;
+    el.textContent = text;
+    el.className = 'git-remote-status' + (type ? ' ' + type : '');
+  }
+
+  _toggleRemotePanel() {
+    const panel = document.getElementById('git-remote-panel');
+    const btn = this.el['git-toggle-remote'];
+    if (!panel) return;
+    const visible = panel.style.display !== 'none';
+    panel.style.display = visible ? 'none' : '';
+    if (btn) btn.textContent = visible ? '▶' : '▼';
+  }
+
+  async setRemote() {
+    if (this.busy) return;
+    const url = this.el['git-remote-url'] ? this.el['git-remote-url'].value.trim() : '';
+    if (!url) { this._setRemoteStatus('Enter a remote URL', 'error'); return; }
+    this.busy = true;
+    this._setRemoteStatus('Setting remote...', 'info');
+    try {
+      const git = await this.ensureGit();
+      if (!git.initialized) await git.initRepo();
+      await git.addRemote('origin', url);
+      // Save token for auth
+      const token = this.el['git-remote-token'] ? this.el['git-remote-token'].value.trim() : '';
+      if (token) {
+        const key = 'pocketide_git_token_' + this.app.currentProjectId;
+        localStorage.setItem(key, token);
+      }
+      this._setRemoteStatus('Remote set: ' + url.split('/').slice(-2).join('/'), 'success');
+    } catch (e) {
+      this._setRemoteStatus('Error: ' + e.message, 'error');
+      console.warn('set remote failed:', e);
+    }
+    this.busy = false;
+    await this.refresh();
+  }
+
+  async clone() {
+    if (this.busy) return;
+    const url = this.el['git-remote-url'] ? this.el['git-remote-url'].value.trim() : '';
+    if (!url) { this._setRemoteStatus('Enter a repository URL to clone', 'error'); return; }
+    this.busy = true;
+    this._setRemoteStatus('Cloning...', 'info');
+    try {
+      const git = await this.ensureGit();
+      // Save the token for the clone operation
+      const token = this.el['git-remote-token'] ? this.el['git-remote-token'].value.trim() : '';
+      if (token) {
+        const key = 'pocketide_git_token_' + this.app.currentProjectId;
+        localStorage.setItem(key, token);
+      }
+      await git.clone(url, {
+        onProgress: (progress) => {
+          if (progress.phase) {
+            const pct = progress.loaded && progress.total ? ` (${Math.round(progress.loaded / progress.total * 100)}%)` : '';
+            this._setRemoteStatus(progress.phase + pct, 'info');
+          }
+        }
+      });
+      this.app.gitInitialized = true;
+      this._setRemoteStatus('Clone complete!', 'success');
+      // Reload files from git
+      this.app.loadProjectFiles(this.app.currentProjectId);
+    } catch (e) {
+      this._setRemoteStatus('Clone failed: ' + e.message, 'error');
+      console.warn('clone failed:', e);
+    }
+    this.busy = false;
+    await this.refresh();
+  }
+
+  async push() {
+    if (this.busy) return;
+    this.busy = true;
+    this._setRemoteStatus('Pushing...', 'info');
+    try {
+      const git = await this.ensureGit();
+      await git.push({
+        onProgress: (progress) => {
+          if (progress.phase) {
+            const pct = progress.loaded && progress.total ? ` (${Math.round(progress.loaded / progress.total * 100)}%)` : '';
+            this._setRemoteStatus(progress.phase + pct, 'info');
+          }
+        }
+      });
+      this._setRemoteStatus('Push complete!', 'success');
+    } catch (e) {
+      this._setRemoteStatus('Push failed: ' + e.message, 'error');
+      console.warn('push failed:', e);
+    }
+    this.busy = false;
+    await this.refresh();
+  }
+
+  async pull() {
+    if (this.busy) return;
+    this.busy = true;
+    this._setRemoteStatus('Pulling...', 'info');
+    try {
+      const git = await this.ensureGit();
+      await git.pull({
+        onProgress: (progress) => {
+          if (progress.phase) {
+            const pct = progress.loaded && progress.total ? ` (${Math.round(progress.loaded / progress.total * 100)}%)` : '';
+            this._setRemoteStatus(progress.phase + pct, 'info');
+          }
+        }
+      });
+      this._setRemoteStatus('Pull complete!', 'success');
+      this.app.loadProjectFiles(this.app.currentProjectId);
+    } catch (e) {
+      this._setRemoteStatus('Pull failed: ' + e.message, 'error');
+      console.warn('pull failed:', e);
+    }
+    this.busy = false;
+    await this.refresh();
+  }
+
+  async fetch() {
+    if (this.busy) return;
+    this.busy = true;
+    this._setRemoteStatus('Fetching...', 'info');
+    try {
+      const git = await this.ensureGit();
+      await git.fetchRemote('origin', {
+        onProgress: (progress) => {
+          if (progress.phase) {
+            const pct = progress.loaded && progress.total ? ` (${Math.round(progress.loaded / progress.total * 100)}%)` : '';
+            this._setRemoteStatus(progress.phase + pct, 'info');
+          }
+        }
+      });
+      this._setRemoteStatus('Fetch complete!', 'success');
+    } catch (e) {
+      this._setRemoteStatus('Fetch failed: ' + e.message, 'error');
+      console.warn('fetch failed:', e);
+    }
     this.busy = false;
     await this.refresh();
   }
@@ -2294,6 +2555,1134 @@ class GitPanel {
 }
 
 // ============================================================
+// Find & Replace
+// ============================================================
+
+class FindReplace {
+  constructor(editor) {
+    this.editor = editor;
+    this.matches = [];
+    this.currentMatch = -1;
+    this.isOpen = false;
+    this.replaceVisible = false;
+    this._wasFocusedBeforeOpen = false;
+    this._pendingSearch = null;
+
+    this.bar = document.getElementById('find-replace-bar');
+    this.findInput = document.getElementById('find-input');
+    this.replaceInput = document.getElementById('replace-input');
+    this.countEl = document.getElementById('find-count');
+    this.replaceRow = document.getElementById('replace-row');
+    this.caseCheck = document.getElementById('find-case-check');
+    this.wordCheck = document.getElementById('find-word-check');
+    this.regexCheck = document.getElementById('find-regex-check');
+
+    this._bindEvents();
+  }
+
+  _bindEvents() {
+    // Search on input
+    this.findInput.addEventListener('input', () => this._doSearch());
+    this.replaceInput.addEventListener('input', () => {});
+
+    // Navigation
+    document.getElementById('find-next').addEventListener('click', () => this.next());
+    document.getElementById('find-prev').addEventListener('click', () => this.prev());
+    document.getElementById('find-replace-one').addEventListener('click', () => this.replace());
+    document.getElementById('find-replace-all').addEventListener('click', () => this.replaceAll());
+
+    // Close
+    document.getElementById('find-close').addEventListener('click', () => this.close());
+
+    // Toggle options
+    this.caseCheck.addEventListener('change', () => this._doSearch());
+    this.wordCheck.addEventListener('change', () => this._doSearch());
+    this.regexCheck.addEventListener('change', () => this._doSearch());
+
+    // Keyboard shortcuts inside inputs
+    this.findInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        if (e.shiftKey) this.prev(); else this.next();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        this.close();
+      }
+    });
+    this.replaceInput.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        this.replace();
+      } else if (e.key === 'Escape') {
+        e.preventDefault();
+        this.close();
+      }
+    });
+  }
+
+  open(withReplace) {
+    if (this.isOpen) {
+      // If already open, just toggle replace row
+      if (withReplace !== undefined) this._toggleReplace(withReplace);
+      this.findInput.focus();
+      this.findInput.select();
+      return;
+    }
+
+    this._wasFocusedBeforeOpen = document.activeElement === this.editor.textarea;
+    this.isOpen = true;
+    this.bar.style.display = '';
+    this._toggleReplace(!!withReplace);
+
+    // Pre-fill with current selection if it's on one line
+    const ta = this.editor.textarea;
+    if (ta.selectionStart !== ta.selectionEnd) {
+      const sel = ta.value.substring(ta.selectionStart, ta.selectionEnd);
+      if (!sel.includes('\n')) {
+        this.findInput.value = sel;
+      }
+    }
+
+    this.findInput.focus();
+    this.findInput.select();
+    this._doSearch();
+  }
+
+  close() {
+    this.isOpen = false;
+    this.bar.style.display = 'none';
+    this.matches = [];
+    this.currentMatch = -1;
+    this.countEl.textContent = '';
+    this._clearDecorations();
+    if (this._wasFocusedBeforeOpen && this.editor && this.editor.textarea) {
+      this.editor.textarea.focus();
+    }
+  }
+
+  toggle(withReplace) {
+    if (this.isOpen) { this.close(); return; }
+    this.open(withReplace);
+  }
+
+  _toggleReplace(show) {
+    this.replaceVisible = show;
+    this.replaceRow.style.display = show ? '' : 'none';
+  }
+
+  _doSearch() {
+    const query = this.findInput.value;
+    if (!query) {
+      this.matches = [];
+      this.currentMatch = -1;
+      this.countEl.textContent = '';
+      this.countEl.className = 'find-count';
+      this._clearDecorations();
+      return;
+    }
+
+    const text = this.editor.getValue();
+    const caseSensitive = this.caseCheck.checked;
+    const wholeWord = this.wordCheck.checked;
+    const useRegex = this.regexCheck.checked;
+
+    let pattern;
+    try {
+      if (useRegex) {
+        pattern = new RegExp(query, caseSensitive ? 'g' : 'gi');
+      } else {
+        const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const wordBoundary = wholeWord ? `\\b${escaped}\\b` : escaped;
+        pattern = new RegExp(wordBoundary, caseSensitive ? 'g' : 'gi');
+      }
+    } catch (e) {
+      this.countEl.textContent = 'Invalid';
+      this.countEl.className = 'find-count no-results';
+      return;
+    }
+
+    // If not using regex and not whole word, do simple search for better performance
+    if (!useRegex && !wholeWord && query.length > 0) {
+      this.matches = [];
+      const searchStr = caseSensitive ? text : text.toLowerCase();
+      const queryLower = caseSensitive ? query : query.toLowerCase();
+      let idx = 0;
+      while ((idx = searchStr.indexOf(queryLower, idx)) !== -1) {
+        this.matches.push({ start: idx, length: query.length });
+        idx++;
+      }
+    } else {
+      this.matches = [];
+      let m;
+      while ((m = pattern.exec(text)) !== null) {
+        this.matches.push({ start: m.index, length: m[0].length });
+        if (m[0].length === 0) pattern.lastIndex++;
+      }
+    }
+
+    // Update count
+    if (this.matches.length === 0) {
+      this.countEl.textContent = 'No results';
+      this.countEl.className = 'find-count no-results';
+      this.currentMatch = -1;
+    } else {
+      // Find the closest match to current cursor
+      const cursor = this.editor.textarea.selectionStart;
+      this.currentMatch = 0;
+      for (let i = 0; i < this.matches.length; i++) {
+        if (this.matches[i].start >= cursor) { this.currentMatch = i; break; }
+        this.currentMatch = i;
+      }
+      this._updateCount();
+    }
+
+    this._highlightCurrent();
+  }
+
+  next() {
+    if (this.matches.length === 0) return;
+    this.currentMatch = (this.currentMatch + 1) % this.matches.length;
+    this._updateCount();
+    this._highlightCurrent();
+  }
+
+  prev() {
+    if (this.matches.length === 0) return;
+    this.currentMatch = (this.currentMatch - 1 + this.matches.length) % this.matches.length;
+    this._updateCount();
+    this._highlightCurrent();
+  }
+
+  replace() {
+    if (this.currentMatch < 0 || this.currentMatch >= this.matches.length) return;
+    const match = this.matches[this.currentMatch];
+    const text = this.editor.textarea.value;
+    const replacement = this.replaceInput.value;
+
+    // Perform replacement
+    const before = text.substring(0, match.start);
+    const after = text.substring(match.start + match.length);
+    const newText = before + replacement + after;
+
+    // Update editor
+    this.editor.textarea.value = newText;
+    this.editor.content = newText;
+    this.editor._updateHighlight();
+    this.editor._updateLineNumbers();
+    this.editor._emit('change', newText);
+
+    // Re-search to update matches
+    this._doSearch();
+  }
+
+  replaceAll() {
+    if (this.matches.length === 0) return;
+    const text = this.editor.textarea.value;
+    const replacement = this.replaceInput.value;
+    const count = this.matches.length;
+
+    // Walk matches in reverse to avoid offset issues
+    let newText = text;
+    for (let i = this.matches.length - 1; i >= 0; i--) {
+      const m = this.matches[i];
+      newText = newText.substring(0, m.start) + replacement + newText.substring(m.start + m.length);
+    }
+
+    // Update editor
+    this.editor.textarea.value = newText;
+    this.editor.content = newText;
+    this.editor._updateHighlight();
+    this.editor._updateLineNumbers();
+    this.editor._emit('change', newText);
+
+    // Re-search
+    this._doSearch();
+  }
+
+  _updateCount() {
+    if (this.matches.length === 0) {
+      this.countEl.textContent = '';
+      this.countEl.className = 'find-count';
+    } else {
+      this.countEl.textContent = `${this.currentMatch + 1} of ${this.matches.length}`;
+      this.countEl.className = 'find-count';
+    }
+  }
+
+  _highlightCurrent() {
+    if (this.currentMatch < 0 || this.currentMatch >= this.matches.length) {
+      // No match selected — just scroll to selection if any
+      return;
+    }
+    const match = this.matches[this.currentMatch];
+    const ta = this.editor.textarea;
+    ta.focus();
+    ta.selectionStart = match.start;
+    ta.selectionEnd = match.start + match.length;
+
+    // Scroll the match into view by calculating line position
+    const text = ta.value.substring(0, match.start);
+    const lineNum = (text.match(/\n/g) || []).length;
+    const lineHeight = parseFloat(getComputedStyle(ta).lineHeight) || 21;
+    const targetTop = lineNum * lineHeight;
+    const taHeight = ta.clientHeight;
+    if (targetTop < ta.scrollTop || targetTop > ta.scrollTop + taHeight - lineHeight * 2) {
+      ta.scrollTop = Math.max(0, targetTop - taHeight / 3);
+    }
+  }
+
+  _clearDecorations() {
+    // We highlight via selection in the textarea, no decorations to clear
+  }
+}
+
+// ============================================================
+// Shell — Command interpreter for the terminal
+// ============================================================
+
+class Shell {
+  constructor(getProjectId, fileListRef, app) {
+    this._getProjectId = getProjectId;
+    this._fileListRef = fileListRef; // ref to app.fileList
+    this._app = app;
+    this.cwd = '/';
+    this.env = { HOME: '/', USER: 'pocket', SHELL: '/bin/psh', TERM: 'xterm-256color' };
+    this.aliases = { ll: 'ls -la', la: 'ls -a', cls: 'clear' };
+  }
+
+  execute(input) {
+    const trimmed = input.trim();
+    if (!trimmed) return { lines: [] };
+
+    // Handle aliases
+    let expanded = trimmed;
+    const firstWord = trimmed.split(/\s+/)[0];
+    if (this.aliases[firstWord]) {
+      expanded = this.aliases[firstWord] + trimmed.slice(firstWord.length);
+    }
+
+    // Handle pipes (simple: only cmd1 | cmd2)
+    const pipeIdx = expanded.indexOf('|');
+    if (pipeIdx !== -1) {
+      const left = expanded.slice(0, pipeIdx).trim();
+      const right = expanded.slice(pipeIdx + 1).trim();
+      const leftResult = this.execute(left);
+      // Feed left output as stdin to right
+      const stdin = leftResult.lines.map(l => l.text).join('\n');
+      return this._execSingle(right, stdin);
+    }
+
+    return this._execSingle(expanded, null);
+  }
+
+  _execSingle(input, stdin) {
+    const tokens = this._tokenize(input);
+    if (tokens.length === 0) return { lines: [] };
+    const cmd = tokens[0];
+    const args = tokens.slice(1);
+
+    const handlers = {
+      help: () => this._cmdHelp(),
+      ls: () => this._cmdLs(args),
+      cd: () => this._cmdCd(args),
+      pwd: () => this._cmdPwd(),
+      cat: () => this._cmdCat(args),
+      echo: () => this._cmdEcho(args),
+      touch: () => this._cmdTouch(args),
+      mkdir: () => this._cmdMkdir(args),
+      rm: () => this._cmdRm(args),
+      mv: () => this._cmdMv(args),
+      cp: () => this._cmdCp(args),
+      clear: () => this._cmdClear(),
+      whoami: () => this._cmdWhoami(),
+      date: () => this._cmdDate(),
+      env: () => this._cmdEnv(),
+      export: () => this._cmdExport(args),
+      head: () => this._cmdHead(args, stdin),
+      tail: () => this._cmdTail(args, stdin),
+      wc: () => this._cmdWc(args, stdin),
+      grep: () => this._cmdGrep(args, stdin),
+      sort: () => this._cmdSort(args, stdin),
+      uniq: () => this._cmdUniq(args, stdin),
+      find: () => this._cmdFind(args),
+      tree: () => this._cmdTree(args),
+      stats: () => this._cmdStats(),
+    };
+
+    if (handlers[cmd]) return handlers[cmd]();
+    return { lines: [{ text: `psh: command not found: ${cmd}`, type: 'error' }] };
+  }
+
+  _tokenize(input) {
+    const tokens = [];
+    let current = '';
+    let inSingle = false, inDouble = false, escaped = false;
+    for (const ch of input) {
+      if (escaped) { current += ch; escaped = false; continue; }
+      if (ch === '\\') { escaped = true; continue; }
+      if (ch === "'" && !inDouble) { inSingle = !inSingle; continue; }
+      if (ch === '"' && !inSingle) { inDouble = !inDouble; continue; }
+      if (ch === ' ' && !inSingle && !inDouble) {
+        if (current) { tokens.push(current); current = ''; }
+        continue;
+      }
+      current += ch;
+    }
+    if (current) tokens.push(current);
+    return tokens;
+  }
+
+  _resolvePath(p) {
+    if (!p) return this.cwd;
+    if (p === '~') return '/';
+    if (p.startsWith('~/')) p = '/' + p.slice(2);
+    if (!p.startsWith('/')) p = this.cwd + (this.cwd.endsWith('/') ? '' : '/') + p;
+    // Normalize: resolve .. and .
+    const parts = p.split('/').filter(Boolean);
+    const resolved = [];
+    for (const part of parts) {
+      if (part === '.') continue;
+      if (part === '..') { resolved.pop(); continue; }
+      resolved.push(part);
+    }
+    return '/' + resolved.join('/');
+  }
+
+  _getFiles() {
+    const projectId = this._getProjectId();
+    return Storage.getProjectFilePaths(projectId);
+  }
+
+  _isDir(path) {
+    const files = this._getFiles();
+    const normalized = path.endsWith('/') ? path : path + '/';
+    return files.some(f => f.startsWith(normalized));
+  }
+
+  _exists(path) {
+    const files = this._getFiles();
+    if (files.includes(path)) return true;
+    return files.some(f => f.startsWith(path.endsWith('/') ? path : path + '/'));
+  }
+
+  _listDir(dirPath) {
+    const files = this._getFiles();
+    const prefix = dirPath.endsWith('/') ? dirPath : dirPath + '/';
+    const entries = new Map();
+    for (const f of files) {
+      if (!f.startsWith(prefix)) continue;
+      const rest = f.slice(prefix.length);
+      const slashIdx = rest.indexOf('/');
+      if (slashIdx === -1) {
+        entries.set(rest, { name: rest, isDir: false });
+      } else {
+        const dirName = rest.slice(0, slashIdx);
+        if (!entries.has(dirName)) entries.set(dirName, { name: dirName, isDir: true });
+      }
+    }
+    return [...entries.values()].sort((a, b) => {
+      if (a.isDir !== b.isDir) return a.isDir ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+  }
+
+  _matchFiles(pattern) {
+    const files = this._getFiles();
+    const resolved = this._resolvePath(pattern);
+    // Exact match
+    if (files.includes(resolved)) return [resolved];
+    // Directory prefix match
+    const prefix = resolved.endsWith('/') ? resolved : resolved + '/';
+    const matches = files.filter(f => f.startsWith(prefix));
+    // Glob support: simple * wildcard
+    const starIdx = pattern.indexOf('*');
+    if (starIdx !== -1) {
+      const regex = new RegExp('^' + pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$');
+      return files.filter(f => regex.test(f));
+    }
+    return matches;
+  }
+
+  // --- Built-in commands ---
+
+  _cmdHelp() {
+    const cmds = [
+      'Available commands:',
+      '',
+      '  ls [-la]       List directory contents',
+      '  cd <dir>       Change directory',
+      '  pwd            Print working directory',
+      '  cat <file>     Display file contents',
+      '  echo <text>    Print text',
+      '  touch <file>   Create a file',
+      '  mkdir <dir>    Create a directory',
+      '  rm <path>      Remove a file',
+      '  mv <s> <d>     Move/rename a file',
+      '  cp <s> <d>     Copy a file',
+      '  grep <pat>     Search for pattern in files',
+      '  head <file>    Show first lines of a file',
+      '  tail <file>    Show last lines of a file',
+      '  wc <file>      Word/line/char count',
+      '  sort [file]    Sort lines',
+      '  uniq [file]    Remove duplicate lines',
+      '  find <pat>     Find files matching pattern',
+      '  tree [dir]     Show directory tree',
+      '  clear          Clear terminal',
+      '  whoami         Print current user',
+      '  date           Print current date/time',
+      '  env            Show environment variables',
+      '  stats          Show file storage stats',
+      '  help           Show this help',
+      '',
+      'Pipes: cmd1 | cmd2',
+      'Shortcuts: Ctrl+` toggle, ↑/↓ history, Tab completion',
+    ];
+    return { lines: cmds.map(t => ({ text: t, type: 'info' })) };
+  }
+
+  _cmdLs(args) {
+    const showAll = args.includes('-a') || args.includes('-la') || args.includes('-al');
+    const showLong = args.includes('-l') || args.includes('-la') || args.includes('-al');
+    const pathArg = args.find(a => !a.startsWith('-'));
+    const target = pathArg ? this._resolvePath(pathArg) : this.cwd;
+
+    if (!this._exists(target) && pathArg) {
+      return { lines: [{ text: `ls: cannot access '${pathArg}': No such file or directory`, type: 'error' }] };
+    }
+
+    const entries = this._listDir(target);
+    if (entries.length === 0) return { lines: [] };
+
+    const lines = [];
+    if (showLong) {
+      lines.push({ text: `total ${entries.length}`, type: 'output' });
+      for (const e of entries) {
+        const perm = e.isDir ? 'drwxr-xr-x' : '-rw-r--r--';
+        const size = e.isDir ? '4096' : '  0';
+        const date = 'Aug 21 12:00';
+        const name = e.isDir ? e.name + '/' : e.name;
+        lines.push({ text: `${perm}  1 user user ${size} ${date} ${name}`, type: 'output' });
+      }
+    } else {
+      let row = '';
+      const colored = entries.map(e => e.isDir ? e.name + '/' : e.name);
+      lines.push({ text: colored.join('  '), type: 'output' });
+    }
+    return { lines };
+  }
+
+  _cmdCd(args) {
+    const target = args[0] || '/';
+    const resolved = this._resolvePath(target);
+    if (target === '-') {
+      // cd - not fully supported, just go to / for now
+      this.cwd = '/';
+      return { lines: [] };
+    }
+    if (!this._exists(resolved)) {
+      return { lines: [{ text: `cd: no such file or directory: ${target}`, type: 'error' }] };
+    }
+    if (!this._isDir(resolved) && target !== '/') {
+      return { lines: [{ text: `cd: not a directory: ${target}`, type: 'error' }] };
+    }
+    this.cwd = resolved === '/' ? '/' : resolved;
+    return { lines: [] };
+  }
+
+  _cmdPwd() {
+    return { lines: [{ text: this.cwd, type: 'output' }] };
+  }
+
+  _cmdCat(args) {
+    if (args.length === 0) return { lines: [{ text: 'cat: missing file operand', type: 'error' }] };
+    const projectId = this._getProjectId();
+    const results = [];
+    for (const arg of args) {
+      const resolved = this._resolvePath(arg);
+      const data = Storage.readFile(projectId, resolved);
+      if (!data) {
+        results.push({ text: `cat: ${arg}: No such file or directory`, type: 'error' });
+        continue;
+      }
+      const content = typeof data === 'string' ? data : data.content || '';
+      content.split('\n').forEach(line => results.push({ text: line, type: 'output' }));
+    }
+    return { lines: results };
+  }
+
+  _cmdEcho(args) {
+    // Handle variable expansion
+    const text = args.map(a => {
+      if (a.startsWith('$')) return this.env[a.slice(1)] || '';
+      return a;
+    }).join(' ');
+    return { lines: [{ text, type: 'output' }] };
+  }
+
+  _cmdTouch(args) {
+    if (args.length === 0) return { lines: [{ text: 'touch: missing file operand', type: 'error' }] };
+    const projectId = this._getProjectId();
+    const results = [];
+    for (const arg of args) {
+      const resolved = this._resolvePath(arg);
+      if (!this._exists(resolved)) {
+        Storage.writeFile(projectId, resolved, '');
+      }
+    }
+    this._refreshFileList();
+    return { lines: results };
+  }
+
+  _cmdMkdir(args) {
+    const dirs = args.filter(a => !a.startsWith('-'));
+    if (dirs.length === 0) return { lines: [{ text: 'mkdir: missing operand', type: 'error' }] };
+    const projectId = this._getProjectId();
+    for (const arg of dirs) {
+      const resolved = this._resolvePath(arg);
+      // Create a .gitkeep or placeholder to represent the directory
+      const placeholder = resolved + '/.gitkeep';
+      if (!this._exists(resolved)) {
+        Storage.writeFile(projectId, placeholder, '');
+      }
+    }
+    this._refreshFileList();
+    return { lines: [] };
+  }
+
+  _cmdRm(args) {
+    const recursive = args.includes('-r') || args.includes('-rf') || args.includes('-fr');
+    const paths = args.filter(a => !a.startsWith('-'));
+    if (paths.length === 0) return { lines: [{ text: 'rm: missing operand', type: 'error' }] };
+    const projectId = this._getProjectId();
+    const results = [];
+    for (const arg of paths) {
+      const resolved = this._resolvePath(arg);
+      if (!this._exists(resolved)) {
+        results.push({ text: `rm: cannot remove '${arg}': No such file or directory`, type: 'error' });
+        continue;
+      }
+      if (this._isDir(resolved) && !recursive) {
+        results.push({ text: `rm: cannot remove '${arg}': Is a directory (use -r)`, type: 'error' });
+        continue;
+      }
+      // Delete file or all files under dir
+      const files = this._getFiles();
+      const prefix = resolved.endsWith('/') ? resolved : resolved + '/';
+      const toDelete = files.filter(f => f === resolved || f.startsWith(prefix));
+      for (const f of toDelete) Storage.deleteFile(projectId, f);
+    }
+    this._refreshFileList();
+    return { lines: results };
+  }
+
+  _cmdMv(args) {
+    if (args.length < 2) return { lines: [{ text: 'mv: missing operand', type: 'error' }] };
+    const projectId = this._getProjectId();
+    const src = this._resolvePath(args[0]);
+    let dest = this._resolvePath(args[1]);
+    if (!this._exists(src)) return { lines: [{ text: `mv: '${args[0]}': No such file or directory`, type: 'error' }] };
+    // If dest is a directory, move into it
+    if (this._isDir(dest)) {
+      const fileName = src.split('/').pop();
+      dest = dest + (dest.endsWith('/') ? '' : '/') + fileName;
+    }
+    Storage.renameFile(projectId, src, dest);
+    this._refreshFileList();
+    return { lines: [] };
+  }
+
+  _cmdCp(args) {
+    if (args.length < 2) return { lines: [{ text: 'cp: missing operand', type: 'error' }] };
+    const projectId = this._getProjectId();
+    const src = this._resolvePath(args[0]);
+    let dest = this._resolvePath(args[1]);
+    if (!this._exists(src)) return { lines: [{ text: `cp: '${args[0]}': No such file or directory`, type: 'error' }] };
+    if (this._isDir(src)) return { lines: [{ text: `cp: '${args[0]}': Is a directory`, type: 'error' }] };
+    if (this._isDir(dest)) {
+      const fileName = src.split('/').pop();
+      dest = dest + (dest.endsWith('/') ? '' : '/') + fileName;
+    }
+    const data = Storage.readFile(projectId, src);
+    if (data) Storage.writeFile(projectId, dest, data.content || '');
+    this._refreshFileList();
+    return { lines: [] };
+  }
+
+  _cmdClear() {
+    return { lines: [], clear: true };
+  }
+
+  _cmdWhoami() {
+    return { lines: [{ text: this.env.USER, type: 'output' }] };
+  }
+
+  _cmdDate() {
+    return { lines: [{ text: new Date().toString(), type: 'output' }] };
+  }
+
+  _cmdEnv() {
+    const lines = Object.entries(this.env).map(([k, v]) => ({ text: `${k}=${v}`, type: 'output' }));
+    return { lines };
+  }
+
+  _cmdExport(args) {
+    for (const arg of args) {
+      const eq = arg.indexOf('=');
+      if (eq !== -1) this.env[arg.slice(0, eq)] = arg.slice(eq + 1);
+    }
+    return { lines: [] };
+  }
+
+  _cmdHead(args, stdin) {
+    let n = 10;
+    let file = null;
+    for (let i = 0; i < args.length; i++) {
+      if (args[i] === '-n' && args[i + 1]) { n = parseInt(args[i + 1]) || 10; i++; }
+      else file = args[i];
+    }
+    let content;
+    if (stdin) {
+      content = stdin;
+    } else if (file) {
+      const data = Storage.readFile(this._getProjectId(), this._resolvePath(file));
+      content = data ? (data.content || '') : null;
+    } else {
+      return { lines: [{ text: 'head: missing file operand', type: 'error' }] };
+    }
+    if (content === null) return { lines: [{ text: `head: ${file}: No such file`, type: 'error' }] };
+    const lines = content.split('\n').slice(0, n).map(l => ({ text: l, type: 'output' }));
+    return { lines };
+  }
+
+  _cmdTail(args, stdin) {
+    let n = 10;
+    let file = null;
+    for (let i = 0; i < args.length; i++) {
+      if (args[i] === '-n' && args[i + 1]) { n = parseInt(args[i + 1]) || 10; i++; }
+      else file = args[i];
+    }
+    let content;
+    if (stdin) {
+      content = stdin;
+    } else if (file) {
+      const data = Storage.readFile(this._getProjectId(), this._resolvePath(file));
+      content = data ? (data.content || '') : null;
+    } else {
+      return { lines: [{ text: 'tail: missing file operand', type: 'error' }] };
+    }
+    if (content === null) return { lines: [{ text: `tail: ${file}: No such file`, type: 'error' }] };
+    const allLines = content.split('\n');
+    const lines = allLines.slice(-n).map(l => ({ text: l, type: 'output' }));
+    return { lines };
+  }
+
+  _cmdWc(args, stdin) {
+    let file = args.find(a => !a.startsWith('-'));
+    let content;
+    if (stdin) {
+      content = stdin;
+    } else if (file) {
+      const data = Storage.readFile(this._getProjectId(), this._resolvePath(file));
+      content = data ? (data.content || '') : null;
+    } else {
+      return { lines: [{ text: 'wc: missing file operand', type: 'error' }] };
+    }
+    if (content === null) return { lines: [{ text: `wc: ${file}: No such file`, type: 'error' }] };
+    const lines = content.split('\n').length;
+    const words = content.split(/\s+/).filter(Boolean).length;
+    const chars = content.length;
+    return { lines: [{ text: `  ${lines}  ${words} ${chars} ${file || ''}`, type: 'output' }] };
+  }
+
+  _cmdGrep(args, stdin) {
+    let ignoreCase = false;
+    const nonFlags = [];
+    for (const a of args) {
+      if (a === '-i') ignoreCase = true;
+      else nonFlags.push(a);
+    }
+    if (nonFlags.length === 0) return { lines: [{ text: 'grep: missing pattern', type: 'error' }] };
+    const pattern = nonFlags[0];
+    let content;
+    if (stdin) {
+      content = stdin;
+    } else if (nonFlags[1]) {
+      const data = Storage.readFile(this._getProjectId(), this._resolvePath(nonFlags[1]));
+      content = data ? (data.content || '') : null;
+    } else {
+      // Search all files
+      const files = this._getFiles();
+      const results = [];
+      const regex = new RegExp(pattern, ignoreCase ? 'i' : '');
+      for (const f of files) {
+        const data = Storage.readFile(this._getProjectId(), f);
+        if (!data) continue;
+        const c = data.content || '';
+        c.split('\n').forEach((line, i) => {
+          if (regex.test(line)) results.push({ text: `${f}:${i + 1}:${line}`, type: 'output' });
+        });
+      }
+      return { lines: results.length ? results : [{ text: '(no matches)', type: 'info' }] };
+    }
+    if (content === null) return { lines: [{ text: `grep: ${nonFlags[1]}: No such file`, type: 'error' }] };
+    const regex = new RegExp(pattern, ignoreCase ? 'i' : '');
+    const results = content.split('\n').filter(l => regex.test(l)).map(l => ({ text: l, type: 'output' }));
+    return { lines: results.length ? results : [{ text: '(no matches)', type: 'info' }] };
+  }
+
+  _cmdSort(args, stdin) {
+    let reverse = args.includes('-r');
+    let file = args.find(a => !a.startsWith('-'));
+    let content;
+    if (stdin) content = stdin;
+    else if (file) {
+      const data = Storage.readFile(this._getProjectId(), this._resolvePath(file));
+      content = data ? (data.content || '') : null;
+    } else {
+      return { lines: [{ text: 'sort: missing file operand', type: 'error' }] };
+    }
+    if (content === null) return { lines: [{ text: `sort: ${file}: No such file`, type: 'error' }] };
+    const lines = content.split('\n').sort();
+    if (reverse) lines.reverse();
+    return { lines: lines.map(l => ({ text: l, type: 'output' })) };
+  }
+
+  _cmdUniq(args, stdin) {
+    let file = args.find(a => !a.startsWith('-'));
+    let content;
+    if (stdin) content = stdin;
+    else if (file) {
+      const data = Storage.readFile(this._getProjectId(), this._resolvePath(file));
+      content = data ? (data.content || '') : null;
+    } else {
+      return { lines: [{ text: 'uniq: missing file operand', type: 'error' }] };
+    }
+    if (content === null) return { lines: [{ text: `uniq: ${file}: No such file`, type: 'error' }] };
+    const lines = [];
+    let prev = null;
+    for (const line of content.split('\n')) {
+      if (line !== prev) { lines.push({ text: line, type: 'output' }); prev = line; }
+    }
+    return { lines };
+  }
+
+  _cmdFind(args) {
+    const pattern = args[0] || '*';
+    const files = this._getFiles();
+    const regex = new RegExp('^' + pattern.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.') + '$', 'i');
+    const results = files.filter(f => regex.test(f.split('/').pop())).map(f => ({ text: f, type: 'output' }));
+    return { lines: results.length ? results : [{ text: '(no matches)', type: 'info' }] };
+  }
+
+  _cmdTree(args) {
+    const target = args[0] ? this._resolvePath(args[0]) : this.cwd;
+    const files = this._getFiles();
+    const prefix = target.endsWith('/') ? target : target + '/';
+    const relevant = files.filter(f => f.startsWith(prefix) || f === target);
+    if (relevant.length === 0) return { lines: [{ text: '(empty)', type: 'info' }] };
+
+    const lines = [{ text: target === '/' ? '/' : target.split('/').pop() + '/', type: 'output' }];
+    // Build tree structure
+    const dirs = new Map();
+    for (const f of relevant) {
+      const rest = f.slice(prefix.length);
+      if (!rest) continue;
+      const parts = rest.split('/');
+      let current = '';
+      for (let i = 0; i < parts.length; i++) {
+        const isLast = i === parts.length - 1;
+        current = current ? current + '/' + parts[i] : parts[i];
+        if (!dirs.has(current)) {
+          const indent = '  '.repeat(i);
+          const connector = isLast ? '└── ' : '├── ';
+          const suffix = isLast ? '' : '/';
+          dirs.set(current, { indent, connector, name: parts[i] + (isLast && !this._isDir(prefix + current) ? '' : '/') });
+        }
+      }
+    }
+    const sorted = [...dirs.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+    for (const [_, d] of sorted) {
+      lines.push({ text: d.indent + d.connector + d.name, type: 'output' });
+    }
+    return { lines };
+  }
+
+  _cmdStats() {
+    const files = this._getFiles();
+    const projectId = this._getProjectId();
+    let totalSize = 0;
+    let fileCount = 0;
+    let dirCount = 0;
+    const dirs = new Set();
+    for (const f of files) {
+      const data = Storage.readFile(projectId, f);
+      if (data) {
+        totalSize += (data.content || '').length;
+        fileCount++;
+      }
+      const parts = f.split('/');
+      for (let i = 1; i < parts.length; i++) {
+        dirs.add(parts.slice(0, i).join('/'));
+      }
+    }
+    dirCount = dirs.size;
+    const sizeStr = totalSize > 1024 * 1024
+      ? (totalSize / 1024 / 1024).toFixed(1) + ' MB'
+      : totalSize > 1024
+        ? (totalSize / 1024).toFixed(1) + ' KB'
+        : totalSize + ' B';
+    const lines = [
+      { text: `Files:       ${fileCount}`, type: 'output' },
+      { text: `Directories: ${dirCount}`, type: 'output' },
+      { text: `Total size:  ${sizeStr}`, type: 'output' },
+      { text: `Storage:     localStorage`, type: 'info' },
+    ];
+    return { lines };
+  }
+
+  _refreshFileList() {
+    if (this._app && this._app.loadProjectFiles) {
+      this._app.loadProjectFiles(this._getProjectId());
+    }
+  }
+
+  getCompletions(partial) {
+    const files = this._getFiles();
+    const resolved = this._resolvePath(partial);
+    const prefix = resolved.endsWith('/') ? resolved : resolved.substring(0, resolved.lastIndexOf('/') + 1);
+    const suffix = resolved.slice(prefix.length);
+    const matches = [];
+    // Directory completions
+    const dirs = new Set();
+    for (const f of files) {
+      if (!f.startsWith(prefix)) continue;
+      const rest = f.slice(prefix.length);
+      const slashIdx = rest.indexOf('/');
+      if (slashIdx !== -1) {
+        const dir = rest.slice(0, slashIdx + 1);
+        if (dir.startsWith(suffix)) dirs.add(dir);
+      } else if (rest.startsWith(suffix)) {
+        matches.push(rest);
+      }
+    }
+    return [...dirs, ...matches];
+  }
+}
+
+// ============================================================
+// Terminal — UI component for the terminal panel
+// ============================================================
+
+class Terminal {
+  constructor(shell) {
+    this.shell = shell;
+    this.body = document.getElementById('terminal-body');
+    this.isOpen = false;
+    this.history = [];
+    this.historyIndex = -1;
+    this.currentInput = '';
+    this._inputEl = null;
+    this._inputLine = null;
+
+    this._bindCloseBtn();
+    this._bindClearBtn();
+  }
+
+  open() {
+    const panel = document.getElementById('terminal-panel');
+    const resize = document.getElementById('terminal-resize');
+    if (!panel || !resize) return;
+    this.isOpen = true;
+    panel.style.display = '';
+    resize.style.display = '';
+    this._ensureInputLine();
+    this._scrollToBottom();
+    if (this._inputEl) this._inputEl.focus();
+  }
+
+  close() {
+    const panel = document.getElementById('terminal-panel');
+    const resize = document.getElementById('terminal-resize');
+    if (!panel || !resize) return;
+    this.isOpen = false;
+    panel.style.display = 'none';
+    resize.style.display = 'none';
+  }
+
+  toggle() {
+    if (this.isOpen) this.close(); else this.open();
+  }
+
+  _bindCloseBtn() {
+    const btn = document.getElementById('btn-terminal-close');
+    if (btn) btn.addEventListener('click', () => this.close());
+  }
+
+  _bindClearBtn() {
+    const btn = document.getElementById('btn-terminal-clear');
+    if (btn) btn.addEventListener('click', () => this.clear());
+  }
+
+  clear() {
+    if (this.body) this.body.innerHTML = '';
+    this._inputEl = null;
+    this._inputLine = null;
+    this._ensureInputLine();
+  }
+
+  _ensureInputLine() {
+    if (!this.body) return;
+    // Remove old input line if no longer in DOM
+    if (this._inputLine && !this._inputLine.parentNode) {
+      this._inputLine = null;
+      this._inputEl = null;
+    }
+    if (this._inputEl) return;
+
+    const line = document.createElement('div');
+    line.className = 'terminal-input-line';
+
+    const prompt = document.createElement('span');
+    prompt.className = 'terminal-input-prompt';
+    prompt.textContent = this._getPrompt();
+
+    const input = document.createElement('input');
+    input.className = 'terminal-input';
+    input.type = 'text';
+    input.autocomplete = 'off';
+    input.autocapitalize = 'off';
+    input.spellcheck = false;
+    input.placeholder = 'Type a command...';
+
+    input.addEventListener('keydown', (e) => this._onKeyDown(e));
+
+    line.appendChild(prompt);
+    line.appendChild(input);
+    this.body.appendChild(line);
+    this._inputLine = line;
+    this._inputEl = input;
+  }
+
+  _getPrompt() {
+    const cwd = this.shell.cwd === '/' ? '~' : '~' + this.shell.cwd;
+    return `${this.shell.env.USER}@pocketide:${cwd}$ `;
+  }
+
+  _onKeyDown(e) {
+    const input = this._inputEl;
+    if (!input) return;
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const cmd = input.value;
+      // Add command line to output
+      this._addLine(this.shell.cwd === '/' ? '~' : '~' + this.shell.cwd + ' $ ' + cmd, 'prompt');
+      if (cmd.trim()) {
+        this.history.push(cmd);
+        this.historyIndex = this.history.length;
+        const result = this.shell.execute(cmd);
+        if (result.clear) {
+          this.clear();
+        } else {
+          for (const line of result.lines) this._addLine(line.text, line.type);
+        }
+      }
+      input.value = '';
+      this._scrollToBottom();
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (this.history.length > 0 && this.historyIndex > 0) {
+        if (this.historyIndex === this.history.length) this.currentInput = input.value;
+        this.historyIndex--;
+        input.value = this.history[this.historyIndex];
+      }
+    } else if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (this.historyIndex < this.history.length - 1) {
+        this.historyIndex++;
+        input.value = this.history[this.historyIndex];
+      } else if (this.historyIndex === this.history.length - 1) {
+        this.historyIndex = this.history.length;
+        input.value = this.currentInput;
+      }
+    } else if (e.key === 'Tab') {
+      e.preventDefault();
+      this._tabComplete(input);
+    } else if (e.key === 'c' && e.ctrlKey) {
+      e.preventDefault();
+      input.value = '';
+    } else if (e.key === 'l' && e.ctrlKey) {
+      e.preventDefault();
+      this.clear();
+    } else if (e.key === 'u' && e.ctrlKey) {
+      e.preventDefault();
+      input.value = '';
+    }
+  }
+
+  _tabComplete(input) {
+    const value = input.value;
+    const parts = value.split(/\s+/);
+    const last = parts[parts.length - 1];
+    if (!last) return;
+    const completions = this.shell.getCompletions(last);
+    if (completions.length === 0) return;
+    if (completions.length === 1) {
+      parts[parts.length - 1] = completions[0];
+      input.value = parts.join(' ');
+    } else {
+      // Show all completions
+      const cwd = this.shell.cwd === '/' ? '~' : '~' + this.shell.cwd;
+      this._addLine(`${cwd} $ ${value}`, 'prompt');
+      this._addLine(completions.join('  '), 'info');
+      // Find common prefix
+      let common = completions[0];
+      for (const c of completions) {
+        while (!c.startsWith(common)) common = common.slice(0, -1);
+      }
+      if (common.length > last.length) {
+        parts[parts.length - 1] = common;
+        input.value = parts.join(' ');
+      }
+      this._scrollToBottom();
+    }
+  }
+
+  _addLine(text, type) {
+    if (!this.body) return;
+    const div = document.createElement('div');
+    div.className = 'terminal-line ' + (type || 'output');
+    if (type === 'prompt') {
+      const promptSpan = document.createElement('span');
+      promptSpan.className = 'term-prompt';
+      // Split off the prompt part
+      const dollarIdx = text.indexOf('$ ');
+      if (dollarIdx !== -1) {
+        promptSpan.textContent = text.slice(0, dollarIdx + 2);
+        const cmdSpan = document.createElement('span');
+        cmdSpan.className = 'term-cmd';
+        cmdSpan.textContent = text.slice(dollarIdx + 2);
+        div.appendChild(promptSpan);
+        div.appendChild(cmdSpan);
+      } else {
+        div.textContent = text;
+      }
+    } else {
+      div.textContent = text;
+    }
+    // Insert before the input line
+    if (this._inputLine && this._inputLine.parentNode === this.body) {
+      this.body.insertBefore(div, this._inputLine);
+    } else {
+      this.body.appendChild(div);
+    }
+  }
+
+  _scrollToBottom() {
+    if (this.body) this.body.scrollTop = this.body.scrollHeight;
+  }
+}
+
+// ============================================================
 // PocketIDE - Main Application
 // ============================================================
 
@@ -2314,6 +3703,11 @@ class PocketIDE {
     /** Git panel + problem-detection state */
     this.gitPanel = null;
     this.gitInitialized = false;
+    /** Find & Replace */
+    this.findReplace = null;
+    /** Terminal */
+    this.terminal = null;
+    this.shell = null;
     this.problems = [];
     this._problemsTimer = null;
     this.init();
@@ -2328,6 +3722,7 @@ class PocketIDE {
     this.initEditor();
     this.initFileTree();
     this.initTabs();
+    this.initTerminal();
     this.setupKeyboardShortcuts();
     this.setupSidebarResize();
     this.setupUIControls();
@@ -2353,6 +3748,7 @@ class PocketIDE {
       }, 200);
     });
 
+    this._updateSaveStatusBar();
     console.log('PocketIDE initialized');
   }
 
@@ -2442,6 +3838,7 @@ class PocketIDE {
     const editorContainer = document.getElementById('editor-wrapper');
     if (!editorContainer) return;
     this.editor = new TextEditor(editorContainer);
+    this.findReplace = new FindReplace(this.editor);
     this.editor.on('save', (content) => {
       const tab = this.tabManager.getActiveTab();
       if (tab) this.saveFile(tab.path, content);
@@ -2454,10 +3851,71 @@ class PocketIDE {
       const saved = this.savedContents.get(tab.path) || '';
       this.tabManager.setTabDirty(tab.path, currentContent !== saved);
       this._scheduleProblemCheck();
+      this._scheduleAutoSave();
     });
     const updateCursorPos = () => this.updateStatusBarPosition();
     this.editor.textarea.addEventListener('click', updateCursorPos);
     this.editor.textarea.addEventListener('keyup', updateCursorPos);
+
+    // Save All button
+    const saveAllBtn = document.getElementById('status-save-all');
+    if (saveAllBtn) {
+      saveAllBtn.addEventListener('click', () => this.saveAllFiles());
+    }
+  }
+
+  _updateSaveStatusBar() {
+    const count = this.getUnsavedCount();
+    const btn = document.getElementById('status-save-all');
+    const countEl = document.getElementById('status-unsaved-count');
+    if (btn) btn.style.display = count > 0 ? '' : 'none';
+    if (countEl) countEl.textContent = count;
+  }
+
+  // --- Terminal ---
+  initTerminal() {
+    const self = this;
+    this.shell = new Shell(
+      () => self.currentProjectId,
+      () => self.fileList,
+      self
+    );
+    this.terminal = new Terminal(this.shell);
+    this._setupTerminalResize();
+  }
+
+  _setupTerminalResize() {
+    const resizeHandle = document.getElementById('terminal-resize');
+    const panel = document.getElementById('terminal-panel');
+    if (!resizeHandle || !panel) return;
+    let startY = 0, startH = 0;
+    const onMove = (e) => {
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      const newH = Math.max(100, Math.min(window.innerHeight * 0.7, startH - (clientY - startY)));
+      panel.style.height = newH + 'px';
+    };
+    const onUp = () => {
+      resizeHandle.classList.remove('resizing');
+      document.removeEventListener('mousemove', onMove);
+      document.removeEventListener('mouseup', onUp);
+      document.removeEventListener('touchmove', onMove);
+      document.removeEventListener('touchend', onUp);
+    };
+    resizeHandle.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      startY = e.clientY;
+      startH = panel.offsetHeight;
+      resizeHandle.classList.add('resizing');
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    });
+    resizeHandle.addEventListener('touchstart', (e) => {
+      startY = e.touches[0].clientY;
+      startH = panel.offsetHeight;
+      resizeHandle.classList.add('resizing');
+      document.addEventListener('touchmove', onMove, { passive: false });
+      document.addEventListener('touchend', onUp);
+    });
   }
 
   // --- File Tree ---
@@ -2601,6 +4059,9 @@ class PocketIDE {
       onNoTabs: () => {
         this.showWelcome();
       },
+      onDirtyChange: () => {
+        this._updateSaveStatusBar();
+      },
     });
   }
 
@@ -2643,6 +4104,50 @@ class PocketIDE {
     }
     if (this.gitPanel) this.gitPanel.refresh();
     console.log(`Saved: ${path}`);
+  }
+
+  _scheduleAutoSave() {
+    clearTimeout(this._autoSaveTimer);
+    this._autoSaveTimer = setTimeout(() => this._autoSave(), 2000);
+  }
+
+  _autoSave() {
+    // Save all dirty tabs
+    let saved = 0;
+    for (const tab of this.tabManager.tabs) {
+      if (tab.dirty) {
+        const content = this.fileContents.get(tab.path);
+        if (content !== undefined) {
+          this.saveFile(tab.path, content);
+          saved++;
+        }
+      }
+    }
+  }
+
+  saveAllFiles() {
+    let saved = 0;
+    for (const tab of this.tabManager.tabs) {
+      if (tab.dirty) {
+        const content = this.fileContents.get(tab.path);
+        if (content !== undefined) {
+          this.saveFile(tab.path, content);
+          saved++;
+        }
+      }
+    }
+    // Also save the current tab even if not marked dirty
+    const activeTab = this.tabManager.getActiveTab();
+    if (activeTab) {
+      const content = this.editor.getValue();
+      this.saveFile(activeTab.path, content);
+      saved++;
+    }
+    return saved;
+  }
+
+  getUnsavedCount() {
+    return this.tabManager.tabs.filter(t => t.dirty).length;
   }
 
   loadProjectFiles(projectId) {
@@ -2986,11 +4491,63 @@ class PocketIDE {
       const ctrl = e.ctrlKey || e.metaKey;
       const shift = e.shiftKey;
 
+      // Ctrl+Shift+S - Save All
+      if (ctrl && shift && (e.key === 'S' || e.key === 's')) {
+        e.preventDefault();
+        this.saveAllFiles();
+        return;
+      }
+
       // Ctrl+S - Save
-      if (ctrl && e.key === 's') {
+      if (ctrl && e.key === 's' && !shift) {
         e.preventDefault();
         const tab = this.tabManager.getActiveTab();
         if (tab) this.saveFile(tab.path, this.editor.getValue());
+        return;
+      }
+
+      // Ctrl+F - Find
+      if (ctrl && e.key === 'f' && !shift) {
+        e.preventDefault();
+        if (this.findReplace) this.findReplace.open(false);
+        return;
+      }
+
+      // Ctrl+Shift+F - Find & Replace
+      if (ctrl && shift && (e.key === 'F' || e.key === 'f')) {
+        e.preventDefault();
+        if (this.findReplace) this.findReplace.open(true);
+        return;
+      }
+
+      // Ctrl+H - Find & Replace (alt shortcut)
+      if (ctrl && e.key === 'h') {
+        e.preventDefault();
+        if (this.findReplace) this.findReplace.open(true);
+        return;
+      }
+
+      // Escape - Close Find & Replace
+      if (e.key === 'Escape' && this.findReplace && this.findReplace.isOpen) {
+        e.preventDefault();
+        e.stopPropagation();
+        this.findReplace.close();
+        return;
+      }
+
+      // Ctrl+` - Toggle Terminal
+      if (ctrl && e.key === '`') {
+        e.preventDefault();
+        if (this.terminal) this.terminal.toggle();
+        return;
+      }
+
+      // Escape - Close Terminal (when terminal is focused)
+      if (e.key === 'Escape' && this.terminal && this.terminal.isOpen && document.activeElement && document.activeElement.closest('#terminal-panel')) {
+        e.preventDefault();
+        e.stopPropagation();
+        this.terminal.close();
+        if (this.editor && this.editor.textarea) this.editor.textarea.focus();
         return;
       }
 
@@ -3449,6 +5006,9 @@ class PocketIDE {
           break;
         case 'toggle-sidebar':
           this.toggleSidebar();
+          break;
+        case 'toggle-terminal':
+          if (this.terminal) this.terminal.toggle();
           break;
         case 'about':
           alert('PocketIDE v1.0 — a mobile-first code editor\n\nAll files are stored locally on this device. No server, no account needed.');

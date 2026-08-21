@@ -1711,6 +1711,58 @@ button:focus {
 .git-commit .gc-msg { font-size: 12px; color: var(--text-primary); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .git-commit .gc-meta { font-size: 10px; color: var(--text-muted); font-family: var(--font-mono); }
 
+/* Git Remote panel */
+#git-remote-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.git-remote-row {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.git-remote-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+}
+
+.git-remote-input {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  padding: 6px 8px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  width: 100%;
+  min-width: 0;
+}
+
+.git-remote-input:focus { outline: none; border-color: var(--accent-color); }
+
+.git-remote-actions {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.git-remote-status {
+  font-size: 11px;
+  color: var(--text-muted);
+  min-height: 16px;
+  word-break: break-all;
+}
+
+.git-remote-status.success { color: #4ec9b0; }
+.git-remote-status.error { color: #f48771; }
+.git-remote-status.info { color: #7fd8c9; }
+
 /* Problems view */
 #problems-head {
   padding: 10px 12px;
@@ -1781,6 +1833,392 @@ button:focus {
 #status-problems .sb-dot.err { background: #ff6b6b; box-shadow: 0 0 5px #ff6b6b; }
 #status-problems .sb-dot.warn { background: #f7d488; box-shadow: 0 0 5px #f7d488; }
 #status-problems .sb-dot.info { background: #7fd8c9; box-shadow: 0 0 5px #7fd8c9; }
+
+#status-save-all {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: none;
+  border: none;
+  color: var(--status-text);
+  cursor: pointer;
+  padding: 0 6px;
+  font-size: 12px;
+  font-family: var(--font-ui);
+  border-radius: 3px;
+  height: 100%;
+  transition: background var(--transition-fast);
+}
+
+#status-save-all:hover { background: rgba(255,255,255,0.15); }
+#status-save-all .icon-svg { width: 14px; height: 14px; }
+#status-save-all #status-unsaved-count {
+  font-size: 11px;
+  font-weight: 600;
+}
+
+/* Find & Replace Bar */
+.find-replace-bar {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 100;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-top: none;
+  border-radius: 0 0 0 8px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  padding: 6px 8px;
+  min-width: 320px;
+  max-width: 480px;
+  font-family: var(--font-ui, sans-serif);
+  font-size: 13px;
+}
+
+.find-row, .replace-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.find-row + .replace-row {
+  margin-top: 4px;
+}
+
+.find-input-wrapper {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  padding: 0 6px;
+  height: 28px;
+}
+
+.find-input-wrapper:focus-within {
+  border-color: var(--accent-color);
+}
+
+.find-icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: var(--text-secondary);
+}
+
+.find-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 13px;
+  font-family: var(--font-mono, monospace);
+  min-width: 0;
+}
+
+.find-input::placeholder {
+  color: var(--text-muted);
+}
+
+.find-count {
+  flex-shrink: 0;
+  font-size: 11px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.find-count.no-results {
+  color: #ff6b6b;
+}
+
+.find-nav, .replace-actions {
+  display: flex;
+  gap: 2px;
+}
+
+.find-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.find-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.find-btn:active {
+  transform: scale(0.92);
+}
+
+.find-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.find-btn .find-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.find-close-btn {
+  margin-left: 2px;
+}
+
+.find-replace-btn {
+  width: 24px;
+}
+
+.find-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.find-toggle input {
+  display: none;
+}
+
+.find-toggle-text {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  border-radius: 4px;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.find-toggle:hover .find-toggle-text {
+  background: var(--bg-hover);
+}
+
+.find-toggle input:checked + .find-toggle-text {
+  background: var(--accent-color);
+  color: #fff;
+}
+
+.find-replace-bar .find-count {
+  min-width: 40px;
+  text-align: center;
+}
+
+@media (max-width: 600px) {
+  .find-replace-bar {
+    min-width: 0;
+    max-width: calc(100vw - 16px);
+    right: 8px;
+    top: 4px;
+    width: calc(100% - 16px);
+  }
+}
+
+/* ============================================================
+   Terminal Panel
+   ============================================================ */
+
+.terminal-resize {
+  height: 4px;
+  cursor: row-resize;
+  background: transparent;
+  flex-shrink: 0;
+  z-index: 10;
+  transition: background var(--transition-fast);
+  position: relative;
+}
+
+.terminal-resize:hover,
+.terminal-resize.resizing {
+  background: var(--accent-color);
+}
+
+.terminal-panel {
+  flex-shrink: 0;
+  height: 200px;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--border-color);
+  position: relative;
+  overflow: hidden;
+}
+
+.terminal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+  height: 32px;
+  background: var(--bg-tertiary);
+  border-bottom: 1px solid var(--border-color);
+  flex-shrink: 0;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.terminal-header-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.terminal-header-icon {
+  width: 14px;
+  height: 14px;
+  color: var(--accent-color);
+}
+
+.terminal-header-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.terminal-header-actions {
+  display: flex;
+  gap: 2px;
+}
+
+.terminal-header-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.terminal-header-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.terminal-header-btn .icon-svg {
+  width: 14px;
+  height: 14px;
+}
+
+.terminal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 12px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  background: #1a1a2e;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.terminal-line {
+  margin-bottom: 1px;
+}
+
+.terminal-line.output {
+  color: var(--text-primary);
+}
+
+.terminal-line.error {
+  color: #ff6b6b;
+}
+
+.terminal-line.info {
+  color: #7fd8c9;
+}
+
+.terminal-line.warning {
+  color: #f7d488;
+}
+
+.terminal-line .term-prompt {
+  color: var(--accent-color);
+  font-weight: 600;
+}
+
+.terminal-line .term-cmd {
+  color: #e0e0e0;
+}
+
+.terminal-input-line {
+  display: flex;
+  align-items: center;
+}
+
+.terminal-input-prompt {
+  color: var(--accent-color);
+  font-weight: 600;
+  white-space: nowrap;
+  flex-shrink: 0;
+  margin-right: 6px;
+}
+
+.terminal-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #e0e0e0;
+  font-family: var(--font-mono);
+  font-size: inherit;
+  line-height: inherit;
+  caret-color: #e0e0e0;
+}
+
+.terminal-input::placeholder {
+  color: var(--text-muted);
+}
+
+/* Terminal scrollbar */
+.terminal-body::-webkit-scrollbar {
+  width: 8px;
+}
+
+.terminal-body::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.terminal-body::-webkit-scrollbar-thumb {
+  background: var(--scrollbar-thumb);
+  border-radius: 4px;
+}
+
+html[data-theme="light"] .terminal-body {
+  background: #1e1e1e;
+}
+
+@media (max-width: 768px) {
+  .terminal-panel {
+    height: 180px;
+  }
+}
 
 /* Autocomplete dropdown */
 .ac-box {

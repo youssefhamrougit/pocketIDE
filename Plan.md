@@ -80,10 +80,10 @@ Features:
 Transform the editor into a real IDE.
 
 Features:
-- ⬜ Integrated terminal
+- ✅ Integrated terminal
 - ⬜ Run JavaScript projects
 - ⬜ Package installation
-- ⬜ Git integration (isomorphic-git)
+- ✅ Git integration (isomorphic-git, clone/push/pull/fetch)
 - ⬜ Project templates
 - ⬜ Error detection & linting
 - ⬜ Code formatting

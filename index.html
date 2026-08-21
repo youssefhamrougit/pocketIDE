@@ -49,6 +49,7 @@
     <symbol id="i-alert" viewBox="0 0 24 24"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><line x1="12" y1="9" x2="12" y2="13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="12" y1="17" x2="12.01" y2="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
     <symbol id="i-check" viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
     <symbol id="i-save" viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="17 21 17 13 7 13 7 21" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="7 3 7 8 15 8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></symbol>
+    <symbol id="i-terminal" viewBox="0 0 24 24"><polyline points="4 17 10 11 4 5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><line x1="12" y1="19" x2="20" y2="19" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
   </svg>
 
   <div id="app">
@@ -103,6 +104,32 @@
           <button class="git-action-btn" id="git-init-btn">Init Repo</button>
         </div>
         <div id="git-body">
+          <!-- Remote section -->
+          <div class="git-section-head">
+            <span>Remote</span>
+            <button class="git-action-btn git-action-btn-sm" id="git-toggle-remote" title="Toggle remote panel">▼</button>
+          </div>
+          <div id="git-remote-panel">
+            <div class="git-remote-row">
+              <label class="git-remote-label">URL</label>
+              <input id="git-remote-url" type="text" class="git-remote-input" placeholder="https://github.com/user/repo.git" autocomplete="off" autocapitalize="off" spellcheck="false" />
+            </div>
+            <div class="git-remote-row">
+              <label class="git-remote-label">Token</label>
+              <input id="git-remote-token" type="password" class="git-remote-input" placeholder="ghp_xxx (optional for public repos)" autocomplete="off" autocapitalize="off" spellcheck="false" />
+            </div>
+            <div class="git-remote-actions">
+              <button class="git-action-btn git-action-btn-sm" id="git-clone-btn">⬇ Clone</button>
+              <button class="git-action-btn git-action-btn-sm" id="git-set-remote-btn">→ Set Remote</button>
+            </div>
+            <div class="git-remote-actions">
+              <button class="git-action-btn git-action-btn-sm" id="git-push-btn">⬆ Push</button>
+              <button class="git-action-btn git-action-btn-sm" id="git-pull-btn">⬇ Pull</button>
+              <button class="git-action-btn git-action-btn-sm" id="git-fetch-btn">↻ Fetch</button>
+            </div>
+            <div id="git-remote-status" class="git-remote-status"></div>
+          </div>
+          <!-- Changes section -->
           <div class="git-section-head">
             <span>Changes</span>
             <button class="git-action-btn git-action-btn-sm" id="git-stage-all">Stage all</button>
@@ -197,6 +224,74 @@
           </div>
         </div>
         <div id="editor-wrapper" style="display:none;"></div>
+
+        <!-- Find & Replace Bar -->
+        <div id="find-replace-bar" class="find-replace-bar" style="display:none;">
+          <div class="find-row">
+            <div class="find-input-wrapper">
+              <svg class="find-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8" fill="none" stroke="currentColor" stroke-width="2"/><line x1="21" y1="21" x2="16.65" y2="16.65" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+              <input type="text" id="find-input" class="find-input" placeholder="Find" autocomplete="off" autocapitalize="off" spellcheck="false" />
+              <span id="find-count" class="find-count"></span>
+            </div>
+            <div class="find-nav">
+              <button class="find-btn" id="find-prev" title="Previous Match (Shift+Enter)">
+                <svg class="find-icon" viewBox="0 0 24 24"><polyline points="18 15 12 9 6 15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <button class="find-btn" id="find-next" title="Next Match (Enter)">
+                <svg class="find-icon" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+            </div>
+            <label class="find-toggle" id="find-case-toggle" title="Match Case">
+              <input type="checkbox" id="find-case-check" />
+              <span class="find-toggle-text">Aa</span>
+            </label>
+            <label class="find-toggle" id="find-word-toggle" title="Match Whole Word">
+              <input type="checkbox" id="find-word-check" />
+              <span class="find-toggle-text">Ab</span>
+            </label>
+            <label class="find-toggle" id="find-regex-toggle" title="Use Regular Expression">
+              <input type="checkbox" id="find-regex-check" />
+              <span class="find-toggle-text">.*</span>
+            </label>
+            <button class="find-btn find-close-btn" id="find-close" title="Close (Escape)">
+              <svg class="find-icon" viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="6" y1="6" x2="18" y2="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            </button>
+          </div>
+          <div class="replace-row" id="replace-row" style="display:none;">
+            <div class="find-input-wrapper">
+              <svg class="find-icon" viewBox="0 0 24 24"><path d="M17 3a2.83 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5z" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              <input type="text" id="replace-input" class="find-input" placeholder="Replace" autocomplete="off" autocapitalize="off" spellcheck="false" />
+            </div>
+            <div class="replace-actions">
+              <button class="find-btn find-replace-btn" id="find-replace-one" title="Replace">
+                <svg class="find-icon" viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 11V9a4 4 0 0 1 4-4h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <button class="find-btn find-replace-btn" id="find-replace-all" title="Replace All">
+                <svg class="find-icon" viewBox="0 0 24 24"><polyline points="17 1 21 5 17 9" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M3 11V9a4 4 0 0 1 4-4h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="17 15 21 19 17 23" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 15v2a4 4 0 0 1-4 4H3" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Terminal Panel -->
+      <div id="terminal-resize" class="terminal-resize" style="display:none;"></div>
+      <div id="terminal-panel" class="terminal-panel" style="display:none;">
+        <div id="terminal-header" class="terminal-header">
+          <div class="terminal-header-left">
+            <svg class="icon-svg terminal-header-icon"><use href="#i-terminal"/></svg>
+            <span class="terminal-header-title">Terminal</span>
+          </div>
+          <div class="terminal-header-actions">
+            <button class="terminal-header-btn" id="btn-terminal-clear" title="Clear">
+              <svg class="icon-svg"><use href="#i-trash"/></svg>
+            </button>
+            <button class="terminal-header-btn" id="btn-terminal-close" title="Close">
+              <svg class="icon-svg"><use href="#i-x"/></svg>
+            </button>
+          </div>
+        </div>
+        <div id="terminal-body" class="terminal-body"></div>
       </div>
 
       <!-- Mobile quick actions (touch buttons for the Ctrl+ shortcuts) -->
@@ -225,6 +320,10 @@
           <span id="status-indentation">Spaces: 2</span>
         </div>
         <div id="status-right">
+          <button id="status-save-all" title="Save All (Ctrl+Shift+S)" aria-label="Save All" style="display:none;">
+            <svg class="icon-svg" style="width:14px;height:14px;"><use href="#i-save"/></svg>
+            <span id="status-unsaved-count">0</span>
+          </button>
           <button id="status-problems" title="Problems" aria-label="Problems" style="display:none;">
             <span class="sb-dot"></span>
             <span class="sb-count">0</span>
@@ -283,6 +382,11 @@
         <span class="bs-icon"><svg class="icon-svg"><use href="#i-folder"/></svg></span>
         <span class="bs-label">Toggle Sidebar</span>
         <span class="bs-shortcut">Ctrl+B</span>
+      </div>
+      <div class="bottom-sheet-item" data-action="toggle-terminal">
+        <span class="bs-icon"><svg class="icon-svg"><use href="#i-terminal"/></svg></span>
+        <span class="bs-label">Toggle Terminal</span>
+        <span class="bs-shortcut">Ctrl+`</span>
       </div>
       <div class="bottom-sheet-separator"></div>
       <div class="bottom-sheet-item" data-action="about">

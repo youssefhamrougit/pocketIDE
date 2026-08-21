@@ -35,14 +35,15 @@ It's intentionally simple:
 |----------|---------|
 | 📄 File manager | Create, rename, duplicate, delete, cut/copy/paste files & folders, copy paths |
 | ⬇️ Import | Import single files or whole folders from the device |
-| 📝 Editor | Syntax highlighting, auto-indent, multi-tab editing, pinch-to-zoom font size (mobile) |
+| 📝 Editor | Syntax highlighting, auto-indent, multi-tab editing, find & replace with regex support, pinch-to-zoom font size (mobile) |
 | ✨ Autocomplete | File-type-aware suggestions that appear as you type |
 | 🚨 Problems panel | Real-time syntax/error detection for JS/TS, Python, JSON, HTML/XML/SVG/Vue & more |
-| 🌿 Git (offline) | `git init`, stage, commit & history — fully local via bundled isomorphic-git, no account needed |
+| 🌿 Git | `git init`, stage, commit & history, clone, push, pull, fetch — remote sync with GitHub token auth |
 | 👁️ Quick preview | Preview files without opening them, right from the file tree |
-| 📑 Tabs | Multi-tab editing with dirty indicators & keyboard shortcuts |
+| 📑 Tabs | Multi-tab editing with dirty indicators, auto-save, save all, and keyboard shortcuts |
 | 🌙 Themes | Dark & light themes |
 | 📱 Mobile-first | Touch-friendly targets, edge-swipe sidebar, bottom-sheet menu, mobile action bar, safe-area support |
+| 💻 Terminal | Integrated terminal with built-in shell commands, command history, tab completion, and file system operations |
 | 🔌 Offline | 100% local — works with no internet connection at all |
 | 🤖 Android APK | Installable WebView build — same app, fully offline, no Play Store required |
 
@@ -80,17 +81,17 @@ Grab [PocketIDE.apk](PocketIDE.apk) from the repo root — it's a WebView wrappe
 - Regex-based syntax highlighting (30+ languages)
 - Autocomplete suggestions
 - Live problems detection (JS/TS, Python, JSON, HTML/XML/SVG/Vue)
-- Offline Git (init, stage, commit, history)
+- Integrated terminal with built-in shell (ls, cd, cat, grep, find, tree, etc.)
+- Git remote sync (clone, push, pull, fetch) with token auth
+- Auto-save with debounce, save-all (Ctrl+Shift+S)
 - Multi-tab editing, dark/light themes, quick preview
 - Android APK build (`android/build.sh`, no Gradle required)
 - Live deployment on Vercel
 
 ### ⬜ On the roadmap
 
-- Integrated terminal
 - AI assistant
 - Cloud workspaces & collaboration
-- Git remote sync (push/pull)
 
 ## ⌨️ Shortcuts
 
@@ -98,8 +99,12 @@ Grab [PocketIDE.apk](PocketIDE.apk) from the repo root — it's a WebView wrappe
 |----------|--------|
 | `Ctrl+N` | New file |
 | `Ctrl+S` | Save |
+| `Ctrl+Shift+S` | Save all files |
+| `Ctrl+F` | Find |
+| `Ctrl+H` / `Ctrl+Shift+F` | Find & Replace |
 | `Ctrl+W` | Close tab |
 | `Ctrl+B` | Toggle sidebar |
+| `Ctrl+` `` ` `` | Toggle terminal |
 | `Ctrl+O` | Open folder (desktop) |
 | `Ctrl+X` / `Ctrl+C` / `Ctrl+V` | Cut / copy / paste in the file tree |
 | `F2` | Rename |
