@@ -2325,6 +2325,18 @@ html[data-theme="light"] .terminal-body {
   font-variant-ligatures: common-ligatures contextual;
 }
 
+/* Error squiggly underlines */
+.squiggly-error {
+  text-decoration: wavy underline #f44747;
+  text-decoration-skip-ink: none;
+  text-underline-offset: 3px;
+  -webkit-text-fill-color: inherit;
+}
+
+html[data-theme="light"] .squiggly-error {
+  text-decoration: wavy underline #cd3131;
+}
+
 html[data-theme="light"] .hl-keyword { color: #0000ff; -webkit-text-fill-color: #0000ff; }
 html[data-theme="light"] .hl-string { color: #a31515; -webkit-text-fill-color: #a31515; }
 html[data-theme="light"] .hl-comment { color: #008000; -webkit-text-fill-color: #008000; }
