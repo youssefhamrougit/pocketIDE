@@ -231,6 +231,9 @@ const JS_RULES = [
   [/\b(?:as|async|await|break|case|catch|class|const|continue|debugger|default|delete|do|else|export|extends|finally|for|from|function|get|if|import|in|instanceof|let|new|of|return|set|static|super|switch|this|throw|try|typeof|var|void|while|with|yield|true|false|null|undefined)\b/, 'hl-keyword'],
   [/\b(?:Math|JSON|console|window|document|globalThis|Array|Object|String|Number|Boolean|Date|RegExp|Map|Set|WeakMap|WeakSet|Promise|Error|TypeError|SyntaxError|ReferenceError|RangeError|Symbol|BigInt|Intl|Proxy|Reflect|parseInt|parseFloat|isNaN|isFinite|fetch|setTimeout|setInterval|clearTimeout|clearInterval|requestAnimationFrame|URL|URLSearchParams|Blob|FormData|AbortController|structuredClone|queueMicrotask)\b/, 'hl-builtin'],
   [/\b\d[\d_]*(?:\.\d+)?(?:[eE][+-]?\d+)?\b|\b0[xX][0-9a-fA-F]+\b|\b0[bB][01]+\b|\b0[oO][0-7]+\b/, 'hl-number'],
+  [/\b[A-Z][A-Z0-9_]+\b/, 'hl-constant'],
+  [/\b[A-Z][a-zA-Z0-9]+\b(?=\s*[.\\(]|\s*$)/, 'hl-class'],
+  [/===|!==|==|!=|<=|>=|=>|<<|>>|>>>|&&=|\|\|=|\?\?|\.\.\.|\*\*|&&|\|\||[=+\-*/%<>!&|^~?:]/, 'hl-operator'],
   [/[A-Za-z_$][\w$]*(?=\s*\()/, 'hl-func'],
 ];
 const TS_RULES = JS_RULES.slice(0, 2).concat([
@@ -260,6 +263,9 @@ const C_RULES = [
   [C_KEYWORDS, 'hl-keyword'],
   [C_TYPES, 'hl-type'],
   [/\b\d[\d_]*(?:\.\d+)?(?:[eE][+-]?\d+)?(?:[uUlLfF]{0,2})?\b|\b0[xX][0-9a-fA-F]+\b|\b0[bB][01]+\b/, 'hl-number'],
+  [/\b[A-Z][A-Z0-9_]+\b/, 'hl-constant'],
+  [/\b(?:class|struct)\s+([A-Z][a-zA-Z0-9]+)/, 'hl-class'],
+  [/[=+\-*/%<>!&|^~?:]+|&&|\|\||<<|>>|<=|>=|==|!=|\+=|\-=|\*=|\/=|%=|&=|\|=|\^=|<<=|>>=|\?\?|\.\.\./, 'hl-operator'],
   [/[A-Za-z_][\w]*(?=\s*\()/, 'hl-func'],
 ];
 SyntaxHighlighter.defs['C++'] = SyntaxHighlighter._compile(C_RULES);
@@ -272,6 +278,9 @@ SyntaxHighlighter.defs['C#'] = SyntaxHighlighter._compile([
   [/\b(?:abstract|as|base|bool|break|byte|case|catch|char|checked|class|const|continue|decimal|default|delegate|do|double|else|enum|event|explicit|extern|false|finally|fixed|float|for|foreach|goto|if|implicit|in|int|interface|internal|is|lock|long|namespace|new|null|object|operator|out|override|params|private|protected|public|readonly|ref|return|sbyte|sealed|short|sizeof|stackalloc|static|string|struct|switch|this|throw|true|try|typeof|uint|ulong|unchecked|unsafe|ushort|using|virtual|void|volatile|while|async|await|record|init|required|var|dynamic)\b/, 'hl-keyword'],
   [/\b(?:List|Dictionary|HashSet|Queue|Stack|IEnumerable|IList|ICollection|IDictionary|Exception|ArgumentException|ArgumentNullException|InvalidOperationException|Console|Math|String|DateTime|Task|Thread|Action|Func|Object|Array)\b/, 'hl-type'],
   [/\b\d[\d_]*(?:\.\d+)?(?:[eE][+-]?\d+)?[fFdDmM]?\b|\b0[xX][0-9a-fA-F]+\b/, 'hl-number'],
+  [/\b[A-Z][A-Z0-9_]+\b/, 'hl-constant'],
+  [/\b[A-Z][a-zA-Z0-9]+\b(?=\s*[.\\(]|\s*$)/, 'hl-class'],
+  [/[=+\-*/%<>!&|^~]+|==|!=|<=|>=|=>|\+=|\-=|\*=|\/=|%=|&=|\|=|\^=|<<|>>|&&|\|\||\?\?/, 'hl-operator'],
   [/[A-Za-z_][\w]*(?=\s*\()/, 'hl-func'],
 ]);
 
@@ -279,10 +288,13 @@ SyntaxHighlighter.defs['C#'] = SyntaxHighlighter._compile([
 SyntaxHighlighter.defs['Python'] = SyntaxHighlighter._compile([
   [/"""[\s\S]*?"""|'''[\s\S]*?'''|"(?:[^"\\\n]|\\.)*"|'(?:[^'\\\n]|\\.)*'/, 'hl-string'],
   [/#[^\n]*/, 'hl-comment'],
-  [/@[A-Za-z_][\w.]*/, 'hl-keyword'],
+  [/@[A-Za-z_][\w.]*/, 'hl-decorator'],
   [/\b(?:and|as|assert|async|await|break|case|class|continue|def|del|elif|else|except|finally|for|from|global|if|import|in|is|lambda|match|nonlocal|not|or|pass|raise|return|try|while|with|yield|True|False|None|self|cls)\b/, 'hl-keyword'],
   [/\b(?:print|len|range|type|str|int|float|bool|list|dict|set|tuple|object|super|isinstance|issubclass|enumerate|zip|map|filter|sorted|reversed|sum|min|max|abs|round|pow|divmod|open|input|repr|format|bytes|bytearray|memoryview|frozenset|complex|hash|id|callable|hasattr|getattr|setattr|delattr|vars|dir|help|Exception|ValueError|TypeError|KeyError|IndexError|AttributeError|NameError|StopIteration|FileNotFoundError|RuntimeError|ZeroDivisionError|ArithmeticError|__init__|__name__|__main__|__file__)\b/, 'hl-builtin'],
   [/\b\d[\d_]*(?:\.\d+)?(?:[eE][+-]?\d+)?j?\b|\b0[xX][0-9a-fA-F]+\b|\b0[bB][01]+\b|\b0[oO][0-7]+\b/, 'hl-number'],
+  [/\b[A-Z][A-Z0-9_]+\b/, 'hl-constant'],
+  [/\bclass\s+([A-Z][a-zA-Z0-9]+)/, 'hl-class'],
+  [/[=+\-*/%<>!&|^~@]+|==|!=|<=|>=|\+=|\-=|\*=|\/=|%=|&=|\|=|\^=|<<|>>|\*\*|\.\.\.|->/, 'hl-operator'],
   [/[A-Za-z_][\w]*(?=\s*\()/, 'hl-func'],
 ]);
 

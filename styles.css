@@ -2353,6 +2353,11 @@ html[data-theme="light"] .terminal-body {
 .hl-func { color: #dcdcaa; -webkit-text-fill-color: #dcdcaa; }
 .hl-preprocessor { color: #c586c0; -webkit-text-fill-color: #c586c0; }
 .hl-param { color: #9cdcfe; -webkit-text-fill-color: #9cdcfe; }
+.hl-operator { color: #d4d4d4; -webkit-text-fill-color: #d4d4d4; }
+.hl-class { color: #4ec9b0; -webkit-text-fill-color: #4ec9b0; }
+.hl-decorator { color: #dcdcaa; -webkit-text-fill-color: #dcdcaa; }
+.hl-constant { color: #4fc1ff; -webkit-text-fill-color: #4fc1ff; }
+.hl-variable { color: #9cdcfe; -webkit-text-fill-color: #9cdcfe; }
 
 /* Bracket matching highlight */
 .hl-bracket-match {
@@ -2397,3 +2402,8 @@ html[data-theme="light"] .hl-tag { color: #800000; -webkit-text-fill-color: #800
 html[data-theme="light"] .hl-attr { color: #0451a5; -webkit-text-fill-color: #0451a5; }
 html[data-theme="light"] .hl-type { color: #267f99; -webkit-text-fill-color: #267f99; }
 html[data-theme="light"] .hl-func { color: #795e26; -webkit-text-fill-color: #795e26; }
+html[data-theme="light"] .hl-operator { color: #333333; -webkit-text-fill-color: #333333; }
+html[data-theme="light"] .hl-class { color: #267f99; -webkit-text-fill-color: #267f99; }
+html[data-theme="light"] .hl-decorator { color: #795e26; -webkit-text-fill-color: #795e26; }
+html[data-theme="light"] .hl-constant { color: #0070c1; -webkit-text-fill-color: #0070c1; }
+html[data-theme="light"] .hl-variable { color: #001080; -webkit-text-fill-color: #001080; }
