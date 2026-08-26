@@ -1035,6 +1035,7 @@ class TextEditor {
     this.gutter = null;
     this.scrollSync = null;
     this._bracketMatchRange = null;
+    this._errorRanges = null;
 
     this._init();
   }
@@ -1084,6 +1085,7 @@ class TextEditor {
       this._updateLineNumbers();
       this._emit('change', this.content);
       this._maybeAutocomplete();
+      this._applyErrors();
       this._updateBracketHighlight();
     });
 
@@ -1217,6 +1219,7 @@ class TextEditor {
         const start = this.textarea.selectionStart;
         const val = this.textarea.value;
         // Look back to find <tagName
+        const beforeCursor = val.substring(0, start);
         const tagMatch = beforeCursor.match(/<([a-zA-Z][a-zA-Z0-9-]*)\s*[^>]*$/);
         if (tagMatch) {
           const tagName = tagMatch[1].toLowerCase();
@@ -1342,55 +1345,61 @@ class TextEditor {
     }
   }
 
-  _updateHighlight() {
-    const highlighted = SyntaxHighlighter.highlight(this.content, this.filename);
-    // Apply bracket pair matching highlight if range is set
-    if (this._bracketMatchRange) {
-      const [hStart, hEnd] = this._bracketMatchRange;
-      // We need to find the positions of the two bracket chars in the highlighted HTML
-      // Strategy: split highlighted HTML by source positions and wrap the two bracket chars
-      const before = highlighted;
-      const raw = this.content;
-      // Build char map: for each raw char position, find the corresponding HTML position
-      let htmlPos = 0;
-      let rawPos = 0;
-      const htmlMap = [];
-      while (rawPos < raw.length && htmlPos < before.length) {
-        if (before.substring(htmlPos, htmlPos + 4) === '&amp;') { htmlMap.push(htmlPos); htmlPos += 5; rawPos++; }
-        else if (before.substring(htmlPos, htmlPos + 3) === '&lt;') { htmlMap.push(htmlPos); htmlPos += 4; rawPos++; }
-        else if (before.substring(htmlPos, htmlPos + 3) === '&gt;') { htmlMap.push(htmlPos); htmlPos += 4; rawPos++; }
-        else if (before[htmlPos] === '<') {
-          // Skip over <span...> tags
-          const tagEnd = before.indexOf('>', htmlPos);
-          if (tagEnd >= 0) { htmlPos = tagEnd + 1; } else { htmlMap.push(htmlPos); htmlPos++; rawPos++; }
-        } else {
-          htmlMap.push(htmlPos);
-          htmlPos++;
-          rawPos++;
-        }
-      }
-      // Wrap the two bracket chars with highlight class
-      const firstPos = htmlMap[hStart];
-      const secondPos = htmlMap[hEnd];
-      if (firstPos !== undefined && secondPos !== undefined) {
-        const insertSecond = secondPos;
-        const insertFirst = firstPos;
-        // Insert second first (higher index) to preserve first index
-        let result = before.substring(0, insertSecond) +
-          '<span class="hl-bracket-match">' + before[insertSecond] + '</span>' +
-          before.substring(insertSecond + 1);
-        // Now find firstPos in the modified string (it may have shifted if insertSecond > insertFirst)
-        // Recalculate: the second insert added 37 chars (len of wrapper), check if it's after firstPos
-        const offset2 = 37; // length of <span class="hl-bracket-match"> + </span>
-        const adjustedFirst = (insertSecond > insertFirst) ? insertFirst : insertFirst + offset2;
-        result = result.substring(0, adjustedFirst) +
-          '<span class="hl-bracket-match">' + result[adjustedFirst] + '</span>' +
-          result.substring(adjustedFirst + 1);
-        this.highlightLayer.innerHTML = result + '\n';
-        return;
+  // Build a map from raw char index -> HTML char index
+  _buildHtmlMap(html, rawLen) {
+    let htmlPos = 0, rawPos = 0;
+    const map = [];
+    while (rawPos < rawLen && htmlPos < html.length) {
+      if (html.substring(htmlPos, htmlPos + 4) === '&amp;') { map.push(htmlPos); htmlPos += 5; rawPos++; }
+      else if (html.substring(htmlPos, htmlPos + 3) === '&lt;') { map.push(htmlPos); htmlPos += 4; rawPos++; }
+      else if (html.substring(htmlPos, htmlPos + 3) === '&gt;') { map.push(htmlPos); htmlPos += 4; rawPos++; }
+      else if (html[htmlPos] === '<') {
+        const tagEnd = html.indexOf('>', htmlPos);
+        if (tagEnd >= 0) { htmlPos = tagEnd + 1; } else { map.push(htmlPos); htmlPos++; rawPos++; }
+      } else {
+        map.push(htmlPos); htmlPos++; rawPos++;
       }
     }
-    this.highlightLayer.innerHTML = highlighted + '\n';
+    return map;
+  }
+
+  // Wrap a range [start, end) of raw positions with a CSS class in the HTML string
+  _wrapRange(html, htmlMap, start, end, cls) {
+    const hStart = htmlMap[start];
+    const hEnd = htmlMap[end - 1];
+    if (hStart === undefined || hEnd === undefined) return html;
+    const tagOpen = `<span class="${cls}">`;
+    const tagClose = '</span>';
+    // Insert end first to preserve start index
+    let result = html.substring(0, hEnd) + tagOpen + html[hEnd] + tagClose + html.substring(hEnd + 1);
+    const shift = tagOpen.length + tagClose.length;
+    const adjStart = (hEnd > hStart) ? hStart : hStart + shift;
+    result = result.substring(0, adjStart) + tagOpen + result[adjStart] + tagClose + result.substring(adjStart + 1);
+    return result;
+  }
+
+  _updateHighlight() {
+    const highlighted = SyntaxHighlighter.highlight(this.content, this.filename);
+    let result = highlighted;
+    const raw = this.content;
+    const htmlMap = this._buildHtmlMap(highlighted, raw.length);
+
+    // 1. Error squiggly underlines
+    if (this._errorRanges && this._errorRanges.length > 0) {
+      // Apply from end to start to keep indices stable
+      const sorted = this._errorRanges.slice().sort((a, b) => b.start - a.start);
+      for (const err of sorted) {
+        result = this._wrapRange(result, htmlMap, err.start, err.end, 'squiggly-error');
+      }
+    }
+
+    // 2. Bracket pair matching highlight
+    if (this._bracketMatchRange) {
+      const [hStart, hEnd] = this._bracketMatchRange;
+      result = this._wrapRange(result, htmlMap, hStart, hEnd + 1, 'hl-bracket-match');
+    }
+
+    this.highlightLayer.innerHTML = result + '\n';
   }
 
   _updateLineNumbers() {
@@ -1446,6 +1455,99 @@ class TextEditor {
 
   _clearBracketHighlight() {
     this._bracketMatchRange = null;
+  }
+
+  // --- Error squiggly underline detection ---
+  _detectErrors() {
+    const errors = [];
+    const val = this.content;
+    if (!val || val.length > 200000) return errors;
+    const lang = LanguageDetector.detect(this.filename).name;
+
+    // 1. Unmatched brackets
+    const stack = [];
+    const PAIRS = { '(': '(', '{': '{', '[': '[' };
+    const CLOSES = { ')': '(', '}': '{', ']': '[' };
+    let inString = false;
+    let stringChar = '';
+    let inLineComment = false;
+    let inBlockComment = false;
+
+    for (let i = 0; i < val.length; i++) {
+      const ch = val[i];
+      const next = val[i + 1];
+
+      // Track string state
+      if (!inLineComment && !inBlockComment) {
+        if ((ch === '"' || ch === "'" || ch === '`') && val[i - 1] !== '\\') {
+          if (inString && ch === stringChar) {
+            inString = false;
+            continue;
+          }
+          if (!inString) {
+            inString = true;
+            stringChar = ch;
+            continue;
+          }
+        }
+      }
+
+      if (inString) continue;
+
+      // Track comments
+      if (!inLineComment && !inBlockComment && ch === '/' && next === '/') { inLineComment = true; continue; }
+      if (!inLineComment && !inBlockComment && ch === '/' && next === '*') { inBlockComment = true; i++; continue; }
+      if (inLineComment && ch === '\n') { inLineComment = false; continue; }
+      if (inBlockComment && ch === '*' && next === '/') { inBlockComment = false; i++; continue; }
+      if (inLineComment || inBlockComment) continue;
+
+      // Track brackets
+      if (PAIRS[ch]) { stack.push({ char: ch, pos: i }); }
+      else if (CLOSES[ch]) {
+        if (stack.length > 0 && stack[stack.length - 1].char === CLOSES[ch]) {
+          stack.pop();
+        } else {
+          errors.push({ start: i, end: i + 1, type: 'unmatched-bracket' });
+        }
+      }
+    }
+    // Remaining unclosed open brackets
+    for (const item of stack) {
+      errors.push({ start: item.pos, end: item.pos + 1, type: 'unmatched-bracket' });
+    }
+
+    // 2. Unclosed strings (only if not in a string at end of file)
+    if (inString) {
+      // Find where the unclosed string started
+      for (let i = val.length - 1; i >= 0; i--) {
+        if (val[i] === stringChar && val[i - 1] !== '\\') {
+          errors.push({ start: i, end: val.length, type: 'unclosed-string' });
+          break;
+        }
+      }
+    }
+
+    // 3. Non-HTML: stray angle brackets that look like broken tags (JS/Python/C++/JSON)
+    if (['JavaScript','TypeScript','JSX','TSX','Python','C++','C','C#','JSON'].includes(lang)) {
+      const tagRe = /<[a-zA-Z][a-zA-Z0-9]*(?:\s|>|\/)/g;
+      let tm;
+      while ((tm = tagRe.exec(val)) !== null) {
+        // Skip if it's in a comment or string (rough check)
+        const before = val.substring(0, tm.index);
+        const singleQuotes = (before.match(/'/g) || []).length % 2;
+        const doubleQuotes = (before.match(/"/g) || []).length % 2;
+        const backticks = (before.match(/`/g) || []).length % 2;
+        if (singleQuotes || doubleQuotes || backticks) continue;
+        errors.push({ start: tm.index, end: tm.index + tm[0].length, type: 'stray-tag' });
+      }
+    }
+
+    return errors;
+  }
+
+  _applyErrors() {
+    const errors = this._detectErrors();
+    this._errorRanges = errors.length > 0 ? errors : null;
   }
 
   _collectDocWords() {
