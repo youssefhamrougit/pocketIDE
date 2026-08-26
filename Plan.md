@@ -215,3 +215,31 @@ pocketide/
 # 👥 Team
 
 Built by developers who wanted a better way to code anywhere.
+
+---
+
+# ✏️ Editor Enhancement Plan — Auto-Closing Brackets & Bracket Matching
+
+## File 1: styles.css ✅ DONE
+- Added `.hl-bracket-match` class for matching bracket highlighting (outline + semi-transparent bg)
+- Added `.bracket-pair-highlight` class for current bracket pair glow
+- Added `.hl-preprocessor` and `.hl-param` token classes
+- Enabled font ligatures (`font-feature-settings: "liga" 1, "calt" 1`) on textarea and highlight layer
+
+## File 2: app.js ✅ DONE
+**Implemented:**
+- Auto-closing of `(`, `{`, `[`, `"`, `'`, `` ` `` with cursor placed between the pair
+- Selected text gets wrapped with the pair instead
+- Smart Enter inside `{}`/`()`/`[]` pairs: new line with indentation + closing bracket on next line
+- Backspace deletes both chars of an empty pair at once
+- Typing over a closing char skips past it instead of inserting a duplicate
+- Quote skipping: if next char is same quote, move cursor past it
+- Bracket pair matching highlight via `_updateBracketHighlight()` method
+- Bracket highlight triggers on input, click, and arrow key movement
+- Highlight applied in `_updateHighlight()` by wrapping matched bracket chars in `<span class="hl-bracket-match">`
+
+## File 3: index.html ✅ NO CHANGES NEEDED
+- Bracket matching works entirely through the existing highlight layer + textarea — no new DOM elements required
+
+---
+*Instructions written by Codebuff. Execute File 2 next.*

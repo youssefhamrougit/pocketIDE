@@ -2300,6 +2300,30 @@ html[data-theme="light"] .terminal-body {
 /* New highlight classes (single-pass tokenizer) */
 .hl-type { color: #4ec9b0; -webkit-text-fill-color: #4ec9b0; }
 .hl-func { color: #dcdcaa; -webkit-text-fill-color: #dcdcaa; }
+.hl-preprocessor { color: #c586c0; -webkit-text-fill-color: #c586c0; }
+.hl-param { color: #9cdcfe; -webkit-text-fill-color: #9cdcfe; }
+
+/* Bracket matching highlight */
+.hl-bracket-match {
+  outline: 1px solid #888;
+  outline-offset: -1px;
+  border-radius: 2px;
+  background: rgba(100, 100, 100, 0.3);
+  -webkit-text-fill-color: inherit;
+}
+
+/* Auto-closing bracket pair highlight (current pair) */
+.bracket-pair-highlight {
+  background: rgba(0, 122, 204, 0.25);
+  border-radius: 2px;
+}
+
+/* Enable font ligatures in editor */
+.editor-textarea,
+.editor-highlight-layer {
+  font-feature-settings: "liga" 1, "calt" 1;
+  font-variant-ligatures: common-ligatures contextual;
+}
 
 html[data-theme="light"] .hl-keyword { color: #0000ff; -webkit-text-fill-color: #0000ff; }
 html[data-theme="light"] .hl-string { color: #a31515; -webkit-text-fill-color: #a31515; }

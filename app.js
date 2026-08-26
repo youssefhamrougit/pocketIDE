@@ -1034,6 +1034,7 @@ class TextEditor {
     this.lineNumbers = null;
     this.gutter = null;
     this.scrollSync = null;
+    this._bracketMatchRange = null;
 
     this._init();
   }
@@ -1083,9 +1084,18 @@ class TextEditor {
       this._updateLineNumbers();
       this._emit('change', this.content);
       this._maybeAutocomplete();
+      this._updateBracketHighlight();
     });
 
     this.textarea.addEventListener('scroll', () => this._syncScroll());
+
+    // Trigger bracket highlight on cursor movement
+    this.textarea.addEventListener('keyup', (e) => {
+      if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','Home','End','PageUp','PageDown'].includes(e.key)) {
+        this._updateBracketHighlight();
+      }
+    });
+    this.textarea.addEventListener('click', () => this._updateBracketHighlight());
 
     this.textarea.addEventListener('keydown', (e) => {
       if (this.ac && this.ac.isOpen()) {
@@ -1098,6 +1108,110 @@ class TextEditor {
       if (e.key === 'Escape' && window.__POCKETIDE && window.__POCKETIDE.findReplace && window.__POCKETIDE.findReplace.isOpen) {
         return; // Let it bubble to document handler
       }
+
+      // --- Auto-closing brackets/parens/quotes ---
+      const PAIRS = { '(': ')', '{': '}', '[': ']', '"': '"', "'": "'", '`': '`' };
+      const OPENERS = new Set(['(', '{', '[']);
+      const CLOSERS = new Set([')', '}', ']']);
+      const QUOTES = new Set(['"', "'", '`']);
+
+      if (PAIRS[e.key] && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const start = this.textarea.selectionStart;
+        const end = this.textarea.selectionEnd;
+        const val = this.textarea.value;
+        const sel = val.substring(start, end);
+
+        // If text is selected, wrap it with the pair
+        if (sel.length > 0) {
+          e.preventDefault();
+          const replacement = e.key + sel + PAIRS[e.key];
+          this.textarea.value = val.substring(0, start) + replacement + val.substring(end);
+          this.textarea.selectionStart = start + 1;
+          this.textarea.selectionEnd = start + 1 + sel.length;
+          this.content = this.textarea.value;
+          this._updateHighlight();
+          this._updateLineNumbers();
+          this._emit('change', this.content);
+          return;
+        }
+
+        // For quotes: if next char is same quote, skip over it instead of inserting
+        if (QUOTES.has(e.key) && val[start] === e.key) {
+          e.preventDefault();
+          this.textarea.selectionStart = this.textarea.selectionEnd = start + 1;
+          return;
+        }
+
+        // Auto-insert closing char and place cursor between
+        e.preventDefault();
+        this.textarea.value = val.substring(0, start) + e.key + PAIRS[e.key] + val.substring(end);
+        this.textarea.selectionStart = this.textarea.selectionEnd = start + 1;
+        this.content = this.textarea.value;
+        this._updateHighlight();
+        this._updateLineNumbers();
+        this._emit('change', this.content);
+        return;
+      }
+
+      // --- Enter key inside bracket pairs: smart newline ---
+      if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const start = this.textarea.selectionStart;
+        const val = this.textarea.value;
+        const charBefore = val[start - 1];
+        const charAfter = val[start];
+        if ((charBefore === '(' && charAfter === ')') ||
+            (charBefore === '{' && charAfter === '}') ||
+            (charBefore === '[' && charAfter === ']')) {
+          e.preventDefault();
+          // Get current line's indentation
+          const lineStart = val.lastIndexOf('\n', start - 1) + 1;
+          const linePrefix = val.substring(lineStart, start);
+          const indent = linePrefix.match(/^[ \t]*/)[0];
+          const extraIndent = charBefore === '{' ? '  ' : '';
+          const newline = '\n' + indent + extraIndent;
+          const closingNewline = '\n' + indent;
+          this.textarea.value = val.substring(0, start) + newline + closingNewline + val.substring(start);
+          this.textarea.selectionStart = this.textarea.selectionEnd = start + newline.length;
+          this.content = this.textarea.value;
+          this._updateHighlight();
+          this._updateLineNumbers();
+          this._emit('change', this.content);
+          return;
+        }
+      }
+
+      // --- Backspace: delete both chars of an empty pair ---
+      if (e.key === 'Backspace' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const start = this.textarea.selectionStart;
+        const end = this.textarea.selectionEnd;
+        if (start === end && start > 0) {
+          const val = this.textarea.value;
+          const before = val[start - 1];
+          const after = val[start];
+          if (PAIRS[before] === after) {
+            e.preventDefault();
+            this.textarea.value = val.substring(0, start - 1) + val.substring(start + 1);
+            this.textarea.selectionStart = this.textarea.selectionEnd = start - 1;
+            this.content = this.textarea.value;
+            this._updateHighlight();
+            this._updateLineNumbers();
+            this._emit('change', this.content);
+            return;
+          }
+        }
+      }
+
+      // --- Skip over closing char if typing it when it's already there ---
+      if (CLOSERS.has(e.key) && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const start = this.textarea.selectionStart;
+        const end = this.textarea.selectionEnd;
+        if (start === end && this.textarea.value[start] === e.key) {
+          e.preventDefault();
+          this.textarea.selectionStart = this.textarea.selectionEnd = start + 1;
+          return;
+        }
+      }
+
       if (e.key === 'Tab') {
         e.preventDefault();
         const start = this.textarea.selectionStart;
@@ -1167,6 +1281,52 @@ class TextEditor {
 
   _updateHighlight() {
     const highlighted = SyntaxHighlighter.highlight(this.content, this.filename);
+    // Apply bracket pair matching highlight if range is set
+    if (this._bracketMatchRange) {
+      const [hStart, hEnd] = this._bracketMatchRange;
+      // We need to find the positions of the two bracket chars in the highlighted HTML
+      // Strategy: split highlighted HTML by source positions and wrap the two bracket chars
+      const before = highlighted;
+      const raw = this.content;
+      // Build char map: for each raw char position, find the corresponding HTML position
+      let htmlPos = 0;
+      let rawPos = 0;
+      const htmlMap = [];
+      while (rawPos < raw.length && htmlPos < before.length) {
+        if (before.substring(htmlPos, htmlPos + 4) === '&amp;') { htmlMap.push(htmlPos); htmlPos += 5; rawPos++; }
+        else if (before.substring(htmlPos, htmlPos + 3) === '&lt;') { htmlMap.push(htmlPos); htmlPos += 4; rawPos++; }
+        else if (before.substring(htmlPos, htmlPos + 3) === '&gt;') { htmlMap.push(htmlPos); htmlPos += 4; rawPos++; }
+        else if (before[htmlPos] === '<') {
+          // Skip over <span...> tags
+          const tagEnd = before.indexOf('>', htmlPos);
+          if (tagEnd >= 0) { htmlPos = tagEnd + 1; } else { htmlMap.push(htmlPos); htmlPos++; rawPos++; }
+        } else {
+          htmlMap.push(htmlPos);
+          htmlPos++;
+          rawPos++;
+        }
+      }
+      // Wrap the two bracket chars with highlight class
+      const firstPos = htmlMap[hStart];
+      const secondPos = htmlMap[hEnd];
+      if (firstPos !== undefined && secondPos !== undefined) {
+        const insertSecond = secondPos;
+        const insertFirst = firstPos;
+        // Insert second first (higher index) to preserve first index
+        let result = before.substring(0, insertSecond) +
+          '<span class="hl-bracket-match">' + before[insertSecond] + '</span>' +
+          before.substring(insertSecond + 1);
+        // Now find firstPos in the modified string (it may have shifted if insertSecond > insertFirst)
+        // Recalculate: the second insert added 37 chars (len of wrapper), check if it's after firstPos
+        const offset2 = 37; // length of <span class="hl-bracket-match"> + </span>
+        const adjustedFirst = (insertSecond > insertFirst) ? insertFirst : insertFirst + offset2;
+        result = result.substring(0, adjustedFirst) +
+          '<span class="hl-bracket-match">' + result[adjustedFirst] + '</span>' +
+          result.substring(adjustedFirst + 1);
+        this.highlightLayer.innerHTML = result + '\n';
+        return;
+      }
+    }
     this.highlightLayer.innerHTML = highlighted + '\n';
   }
 
@@ -1181,6 +1341,48 @@ class TextEditor {
       num.textContent = i;
       this.lineNumbers.appendChild(num);
     }
+  }
+
+  // --- Bracket pair matching highlight ---
+  _updateBracketHighlight() {
+    const pos = this.textarea.selectionStart;
+    if (pos !== this.textarea.selectionEnd) return; // skip if selection
+    const val = this.textarea.value;
+    const MATCH = { '(': ')', ')': '(', '{': '}', '}': '{', '[': ']', ']': '[' };
+    const char = val[pos] || val[pos - 1];
+    if (!char || !MATCH[char]) return;
+
+    const isForward = val[pos] === char && MATCH[char] !== char;
+    const searchChar = isForward ? char : MATCH[char];
+    const openChar = (char === '(' || char === '{' || char === '[') ? char : MATCH[char];
+    const closeChar = MATCH[openChar];
+    const dir = (char === openChar) ? 1 : -1;
+    let depth = 0;
+    let startIdx = -1, endIdx = -1;
+    const from = (char === openChar) ? pos : pos - 1;
+
+    for (let i = from; i >= 0 && i < val.length; i += dir) {
+      if (val[i] === openChar) depth++;
+      else if (val[i] === closeChar) depth--;
+      if (depth === 0) {
+        if (dir === 1) { startIdx = from; endIdx = i; }
+        else { startIdx = i; endIdx = from; }
+        break;
+      }
+    }
+    if (startIdx < 0) return;
+
+    // Apply highlight class to the matched pair in the highlight layer
+    // We do this by wrapping matched chars in a span with a special class
+    const raw = this.content;
+    const hStart = startIdx;
+    const hEnd = endIdx;
+    // Rebuild highlight with bracket match markers
+    this._bracketMatchRange = [hStart, hEnd];
+  }
+
+  _clearBracketHighlight() {
+    this._bracketMatchRange = null;
   }
 
   _collectDocWords() {
