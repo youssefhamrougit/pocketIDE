@@ -1579,6 +1579,7 @@ class TextEditor {
     if (this.textarea.value !== text) {
       this.textarea.value = text;
       this.content = text;
+      this._applyErrors();
       this._updateHighlight();
       this._updateLineNumbers();
       this.textarea.selectionStart = this.textarea.selectionEnd = 0;
