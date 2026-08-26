@@ -1212,6 +1212,69 @@ class TextEditor {
         }
       }
 
+      // --- Auto-close HTML tags ---
+      if (e.key === '>' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const start = this.textarea.selectionStart;
+        const val = this.textarea.value;
+        // Look back to find <tagName
+        const tagMatch = beforeCursor.match(/<([a-zA-Z][a-zA-Z0-9-]*)\s*[^>]*$/);
+        if (tagMatch) {
+          const tagName = tagMatch[1].toLowerCase();
+          const SELF_CLOSING = new Set(['area','br','col','embed','hr','img','input','link','meta','param','source','track','wbr']);
+          if (!SELF_CLOSING.has(tagName) && !beforeCursor.endsWith('/')) {
+            // Check it's not a closing tag (</div>)
+            const charBeforeTag = beforeCursor[beforeCursor.lastIndexOf('<')];
+            if (charBeforeTag !== '/') {
+              e.preventDefault();
+              const insert = '></' + tagName + '>';
+              this.textarea.value = val.substring(0, start) + insert + val.substring(start);
+              this.textarea.selectionStart = this.textarea.selectionEnd = start + 1;
+              this.content = this.textarea.value;
+              this._updateHighlight();
+              this._updateLineNumbers();
+              this._emit('change', this.content);
+              return;
+            }
+          }
+        }
+      }
+
+      // Auto-complete closing tag when typing </
+      if (e.key === '/' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        const start = this.textarea.selectionStart;
+        const val = this.textarea.value;
+        if (val[start - 1] === '<') {
+          // Find the last unclosed opening tag
+          const openTags = [];
+          const tagRe = /<([a-zA-Z][a-zA-Z0-9-]*)(?:\s[^>]*)?>/g;
+          let m;
+          while ((m = tagRe.exec(val)) !== null) {
+            if (m.index >= start) break;
+            const SELF_CLOSING = new Set(['area','br','col','embed','hr','img','input','link','meta','param','source','track','wbr']);
+            const tName = m[1].toLowerCase();
+            const isClosing = val[m.index + 1] === '/';
+            const isSelfClose = SELF_CLOSING.has(tName) || m[0].endsWith('/>');
+            if (isClosing) {
+              if (openTags.length && openTags[openTags.length - 1] === tName) openTags.pop();
+            } else if (!isSelfClose) {
+              openTags.push(tName);
+            }
+          }
+          if (openTags.length > 0) {
+            const lastTag = openTags[openTags.length - 1];
+            e.preventDefault();
+            const insert = '/' + lastTag + '>';
+            this.textarea.value = val.substring(0, start) + insert + val.substring(start);
+            this.textarea.selectionStart = this.textarea.selectionEnd = start + insert.length;
+            this.content = this.textarea.value;
+            this._updateHighlight();
+            this._updateLineNumbers();
+            this._emit('change', this.content);
+            return;
+          }
+        }
+      }
+
       if (e.key === 'Tab') {
         e.preventDefault();
         const start = this.textarea.selectionStart;
