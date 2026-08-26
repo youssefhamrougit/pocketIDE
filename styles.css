@@ -602,6 +602,53 @@ html, body {
 .hl-tag { color: #569cd6; -webkit-text-fill-color: #569cd6; }
 .hl-attr { color: #9cdcfe; -webkit-text-fill-color: #9cdcfe; }
 
+/* ---- Minimap ---- */
+.editor-minimap {
+  position: relative;
+  width: 60px;
+  flex-shrink: 0;
+  background: var(--editor-gutter);
+  border-left: 1px solid var(--border-color);
+  overflow: hidden;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+.minimap-content {
+  padding: 8px 4px;
+  transform: scale(0.18);
+  transform-origin: top left;
+  width: 556%; /* 1 / 0.18 ≈ 556% to undo scale for layout */
+  pointer-events: none;
+}
+
+.minimap-line {
+  height: 4px;
+  margin-bottom: 1px;
+  border-radius: 1px;
+  min-width: 2px;
+}
+
+.minimap-slider {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 3px;
+  top: 0;
+  height: 10%;
+  min-height: 16px;
+  pointer-events: none;
+  transition: top 50ms ease;
+}
+
+html[data-theme="light"] .minimap-slider {
+  background: rgba(0, 0, 0, 0.08);
+  border-color: rgba(0, 0, 0, 0.15);
+}
+
 /* ---- Welcome Screen ---- */
 #editor-welcome {
   width: 100%;
@@ -1252,6 +1299,10 @@ html, body {
 
   .editor-wrapper-custom {
     font-size: 12px;
+  }
+
+  .editor-minimap {
+    display: none;
   }
 
   .editor-gutter {

@@ -1036,6 +1036,7 @@ class TextEditor {
     this.scrollSync = null;
     this._bracketMatchRange = null;
     this._errorRanges = null;
+    this._minimapTimer = null;
 
     this._init();
   }
@@ -1070,11 +1071,24 @@ class TextEditor {
     this.scrollSync.appendChild(this.textarea);
 
     this.editorWrapper.appendChild(this.scrollSync);
+
+    // Minimap
+    this.minimap = document.createElement('div');
+    this.minimap.className = 'editor-minimap';
+    this.minimapContent = document.createElement('div');
+    this.minimapContent.className = 'minimap-content';
+    this.minimap.appendChild(this.minimapContent);
+    this.minimapSlider = document.createElement('div');
+    this.minimapSlider.className = 'minimap-slider';
+    this.minimap.appendChild(this.minimapSlider);
+    this.editorWrapper.appendChild(this.minimap);
+
     this.container.appendChild(this.editorWrapper);
 
     this._bindEvents();
     this._syncScroll();
     this._updateLineNumbers();
+    this._buildMinimap();
     this.ac = new AutocompleteBox();
   }
 
@@ -1087,9 +1101,15 @@ class TextEditor {
       this._maybeAutocomplete();
       this._applyErrors();
       this._updateBracketHighlight();
+      // Debounced minimap rebuild
+      if (this._minimapTimer) clearTimeout(this._minimapTimer);
+      this._minimapTimer = setTimeout(() => this._buildMinimap(), 300);
     });
 
-    this.textarea.addEventListener('scroll', () => this._syncScroll());
+    this.textarea.addEventListener('scroll', () => {
+      this._syncScroll();
+      this._syncMinimapScroll();
+    });
 
     // Trigger bracket highlight on cursor movement
     this.textarea.addEventListener('keyup', (e) => {
@@ -1336,6 +1356,9 @@ class TextEditor {
         this.textarea.selectionEnd = end;
       }
     });
+
+    // Minimap click to jump
+    this.minimap.addEventListener('click', (e) => this._minimapClick(e));
   }
 
   _syncScroll() {
@@ -1548,6 +1571,73 @@ class TextEditor {
   _applyErrors() {
     const errors = this._detectErrors();
     this._errorRanges = errors.length > 0 ? errors : null;
+  }
+
+  // --- Minimap ---
+  _buildMinimap() {
+    if (!this.minimapContent) return;
+    const lines = this.content.split('\n');
+    const frag = document.createDocumentFragment();
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      const div = document.createElement('div');
+      div.className = 'minimap-line';
+      // Approximate width: 1 char ≈ 2px at minimap scale
+      const charCount = line.length;
+      const width = Math.min(charCount * 2, 56);
+      div.style.width = width + 'px';
+      // Color hint based on line content
+      const trimmed = line.trim();
+      if (trimmed.startsWith('//') || trimmed.startsWith('/*') || trimmed.startsWith('*') || trimmed.startsWith('#')) {
+        div.style.background = 'rgba(106,153,85,0.4)'; // comment green
+      } else if (/^\s*<[a-zA-Z]/.test(line)) {
+        div.style.background = 'rgba(86,156,214,0.4)'; // tag blue
+      } else if (/^\s*(function|const|let|var|class|if|else|for|while|return|def|import|from|public|private|static|struct|void|int|float|double|char|bool|using|namespace|include)\b/.test(line)) {
+        div.style.background = 'rgba(197,134,192,0.3)'; // keyword purple
+      } else if (/['"]/.test(trimmed[0]) || /^\s*["']/.test(line)) {
+        div.style.background = 'rgba(206,145,120,0.3)'; // string orange
+      } else {
+        div.style.background = 'rgba(200,200,200,0.12)'; // default
+      }
+      frag.appendChild(div);
+    }
+    this.minimapContent.innerHTML = '';
+    this.minimapContent.appendChild(frag);
+    this._syncMinimapScroll();
+  }
+
+  _syncMinimapScroll() {
+    if (!this.minimapSlider || !this.textarea) return;
+    const ta = this.textarea;
+    const scrollRatio = ta.scrollTop / (ta.scrollHeight || 1);
+    const viewRatio = ta.clientHeight / (ta.scrollHeight || 1);
+    const sliderHeight = Math.max(viewRatio * 100, 10);
+    const sliderTop = scrollRatio * 100;
+    this.minimapSlider.style.height = sliderHeight + '%';
+    this.minimapSlider.style.top = sliderTop + '%';
+    // Also scroll the minimap content
+    const minimapScroll = this.minimapContent.scrollHeight - this.minimap.clientHeight;
+    this.minimapContent.scrollTop = scrollRatio * minimapScroll;
+  }
+
+  _minimapClick(e) {
+    if (!this.textarea || !this.minimap) return;
+    const rect = this.minimap.getBoundingClientRect();
+    const y = e.clientY - rect.top;
+    const ratio = y / rect.height;
+    const lines = this.content.split('\n');
+    const targetLine = Math.floor(ratio * lines.length);
+    let charPos = 0;
+    for (let i = 0; i < targetLine && i < lines.length; i++) {
+      charPos += lines[i].length + 1;
+    }
+    this.textarea.focus();
+    this.textarea.selectionStart = this.textarea.selectionEnd = charPos;
+    // Scroll to center that line
+    const lineHeight = parseFloat(getComputedStyle(this.textarea).lineHeight) || 21;
+    this.textarea.scrollTop = (targetLine * lineHeight) - (this.textarea.clientHeight / 2);
+    this._syncMinimapScroll();
+    this._updateBracketHighlight();
   }
 
   _collectDocWords() {
